@@ -1,0 +1,7 @@
+{
+  "name": "StoryBoard Gamaxa ",
+  "description": "A controlled content-generation pipeline using Google Gemini for scripts, audio, images, and SEO.",
+  "requestFramePermissions": [
+    "clipboard-read"
+  ]
+}

@@ -1,6 +1,7 @@
 
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { StepIndicator } from './components/StepIndicator';
+import { HelpModal } from './components/HelpModal';
 import { Step1Settings } from './components/steps/Step1Settings';
 import { Step2ScriptAudio } from './components/steps/Step2ScriptAudio';
 import { Step3Images } from './components/steps/Step3Images';
@@ -46,6 +47,7 @@ const App: React.FC = () => {
   });
 
   const [currentModel, setCurrentModel] = useState("gemini-2.0-flash");
+  const [isHelpOpen, setIsHelpOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleModelChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -208,12 +210,18 @@ const App: React.FC = () => {
       }
     };
     
-    // Generate filename based on topic
-    const safeTitle = state.topic 
-      ? state.topic.trim().replace(/[^a-z0-9]+/gi, '_').toLowerCase() 
+    // Generate filename based on topic or script text
+    let baseName = state.topic;
+    if (!baseName && state.scriptText) {
+      baseName = state.scriptText.split(/\s+/).slice(0, 5).join('_');
+    }
+    
+    const safeTitle = baseName 
+      ? baseName.trim().replace(/[^a-z0-9]+/gi, '_').toLowerCase() 
       : 'untitled_session';
-    const dateStr = new Date().toISOString().slice(0,10);
-    const filename = `${safeTitle}_${dateStr}.json`;
+      
+    const timestamp = new Date().toISOString().replace(/[:.-]/g, '_'); // More precise timestamp
+    const filename = `${safeTitle}_${timestamp}.json`;
     
     const blob = new Blob([JSON.stringify(snapshot, null, 2)], { type: "application/json" });
     downloadFile(blob, filename);
@@ -250,11 +258,26 @@ const App: React.FC = () => {
            };
         }
         
-        // Remove undefined/nulls to avoid overwriting with empty if not intended,
-        // but here we generally want to overwrite current state with loaded state.
-        
-        setState(prev => ({
-           ...prev,
+        // Reset to initial state then apply loaded state to avoid ghost data
+        const initialState: AppState = {
+            currentStep: Step.Settings,
+            settings: INITIAL_SETTINGS,
+            topic: "",
+            scriptText: "",
+            scriptAnalysis: null,
+            audioBase64: null,
+            selectedVoice: null,
+            scenes: [],
+            seoData: null,
+            isAnalyzing: false,
+            isImproving: false,
+            isGeneratingAudio: false,
+            isGeneratingSEO: false,
+            isSegmenting: false,
+        };
+
+        setState({
+           ...initialState,
            ...loadedState,
            // Ensure loading flags are off
             isAnalyzing: false,
@@ -262,7 +285,7 @@ const App: React.FC = () => {
             isGeneratingAudio: false,
             isGeneratingSEO: false,
             isSegmenting: false,
-        }));
+        });
         
         alert(`Session loaded: ${loadedState.topic || "Untitled"}`);
 
@@ -298,13 +321,15 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen text-white flex flex-col items-center py-10 px-4 bg-[#0B0F19]">
+      <HelpModal isOpen={isHelpOpen} onClose={() => setIsHelpOpen(false)} />
       <div className="w-full max-w-6xl relative">
         
         {/* Header */}
-        <div className="mb-8 flex flex-col items-center relative">
+        <div className="mb-8 flex flex-col items-center gap-6 relative">
           
-          {/* Model Selector (Top Left) */}
-          <div className="absolute left-0 top-2 z-20">
+          {/* Model Selector & Session Buttons Container */}
+          <div className="w-full flex flex-col sm:flex-row items-center justify-between gap-4 z-20">
+            {/* Model Selector */}
             <div className="relative group">
               <div className="flex items-center gap-2 bg-[#161b22]/80 backdrop-blur-md border border-gray-700/50 rounded-lg px-3 py-1.5 hover:border-gray-500 transition-all shadow-lg">
                 <div className={`w-2 h-2 rounded-full ${currentModel.includes('pro') ? 'bg-purple-500' : 'bg-green-500'} shadow-[0_0_8px_rgba(34,197,94,0.4)]`}></div>
@@ -320,38 +345,50 @@ const App: React.FC = () => {
                 <svg className="w-3 h-3 text-gray-500 absolute right-2 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" /></svg>
               </div>
             </div>
+
+            {/* Session Buttons */}
+            <div className="flex items-center gap-2">
+              <input 
+                type="file" 
+                ref={fileInputRef} 
+                onChange={handleLoadSession} 
+                className="hidden" 
+                accept=".json"
+              />
+              <button
+                 onClick={handleLoadSessionClick}
+                 className="text-xs font-bold text-gray-500 hover:text-white flex items-center gap-2 border border-gray-800 hover:border-gray-600 bg-gray-900/50 hover:bg-gray-800 rounded-lg px-3 py-1.5 transition-all"
+                 title="Upload previously saved .json session"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
+                <span className="hidden sm:inline">Load Session</span>
+              </button>
+
+              <button
+                 onClick={handleSaveSession}
+                 className="text-xs font-bold text-gray-500 hover:text-white flex items-center gap-2 border border-gray-800 hover:border-gray-600 bg-gray-900/50 hover:bg-gray-800 rounded-lg px-3 py-1.5 transition-all"
+                 title="Save current progress as .json"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" /></svg>
+                <span className="hidden sm:inline">Save Session</span>
+              </button>
+
+              <button
+                 onClick={() => setIsHelpOpen(true)}
+                 className="text-xs font-bold text-indigo-400 hover:text-white flex items-center gap-2 border border-indigo-900/30 hover:border-indigo-500/50 bg-indigo-500/5 hover:bg-indigo-500/20 rounded-lg px-3 py-1.5 transition-all shadow-lg shadow-indigo-500/5"
+                 title="App Guide & Documentation"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                <span className="hidden sm:inline">Help</span>
+              </button>
+            </div>
           </div>
 
-          <h1 className="text-3xl font-extrabold tracking-tight bg-gradient-to-r from-indigo-400 to-cyan-400 bg-clip-text text-transparent text-center">
-            Gemini Creator Studio
-          </h1>
-          <p className="text-gray-500 mt-2 text-center">Script Analysis & Production Pipeline</p>
-
-          <div className="absolute right-0 top-2 flex items-center gap-2">
-            <input 
-              type="file" 
-              ref={fileInputRef} 
-              onChange={handleLoadSession} 
-              className="hidden" 
-              accept=".json"
-            />
-            <button
-               onClick={handleLoadSessionClick}
-               className="text-xs font-bold text-gray-500 hover:text-white flex items-center gap-2 border border-gray-800 hover:border-gray-600 bg-gray-900/50 hover:bg-gray-800 rounded-lg px-3 py-1.5 transition-all"
-               title="Upload previously saved .json session"
-            >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
-              <span className="hidden sm:inline">Load Session</span>
-            </button>
-
-            <button
-               onClick={handleSaveSession}
-               className="text-xs font-bold text-gray-500 hover:text-white flex items-center gap-2 border border-gray-800 hover:border-gray-600 bg-gray-900/50 hover:bg-gray-800 rounded-lg px-3 py-1.5 transition-all"
-               title="Save current progress as .json"
-            >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" /></svg>
-              <span className="hidden sm:inline">Save Session</span>
-            </button>
+          <div className="text-center">
+            <h1 className="text-3xl font-extrabold tracking-tight bg-gradient-to-r from-indigo-400 to-cyan-400 bg-clip-text text-transparent">
+              Gemini Creator Studio
+            </h1>
+            <p className="text-gray-500 mt-2">Script Analysis & Production Pipeline</p>
           </div>
         </div>
 
@@ -362,7 +399,7 @@ const App: React.FC = () => {
         />
 
         {/* Main Content Area */}
-        <div className="bg-[#111827]/50 border border-gray-800 shadow-2xl rounded-2xl p-6 md:p-8 min-h-[600px] relative overflow-hidden backdrop-blur-sm transition-all duration-500">
+        <div className="bg-[#111827]/50 border border-gray-800 shadow-2xl rounded-2xl p-4 sm:p-6 md:p-8 min-h-[600px] relative overflow-hidden backdrop-blur-sm transition-all duration-500">
           <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-b from-indigo-500/5 to-transparent pointer-events-none" />
 
           {state.currentStep === Step.Settings && (
@@ -413,6 +450,8 @@ const App: React.FC = () => {
               isGenerating={state.isGeneratingSEO}
               onRestart={handleRestart}
               hasScript={!!state.scriptText}
+              title={state.topic}
+              script={state.scriptText}
             />
           )}
         </div>

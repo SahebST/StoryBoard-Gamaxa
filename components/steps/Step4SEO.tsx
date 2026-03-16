@@ -7,6 +7,8 @@ interface Props {
   isGenerating: boolean;
   onRestart: () => void;
   hasScript: boolean;
+  title?: string;
+  script?: string;
 }
 
 const CopyButton: React.FC<{ text: string, label?: string, onClick?: () => void }> = ({ text, label = "Copy", onClick }) => {
@@ -77,7 +79,7 @@ const KeywordChip: React.FC<{ keyword: string }> = ({ keyword }) => {
   );
 };
 
-export const Step4SEO: React.FC<Props> = ({ seoData, isGenerating, onRestart, hasScript }) => {
+export const Step4SEO: React.FC<Props> = ({ seoData, isGenerating, onRestart, hasScript, title, script }) => {
   
   const handleDownload = () => {
     if (!seoData) return;
@@ -96,11 +98,17 @@ KEYWORDS:
 ${seoData.keywords.join(', ')}
     `.trim();
 
+    let baseName = title;
+    if (!baseName && script) {
+      baseName = script.split(/\s+/).slice(0, 5).join('_');
+    }
+    const safeTitle = baseName ? baseName.trim().replace(/[^a-z0-9]+/gi, '_').toLowerCase() : 'video_metadata';
+    
     const blob = new Blob([content], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `video_metadata_${new Date().toISOString().slice(0,10)}.txt`;
+    a.download = `${safeTitle}_seo.txt`;
     a.click();
     URL.revokeObjectURL(url);
   };

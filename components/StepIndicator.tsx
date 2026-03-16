@@ -21,8 +21,8 @@ export const StepIndicator: React.FC<StepIndicatorProps> = ({ currentStep, onSte
   const completedColor = isAutonomousMode ? 'bg-amber-700 border-amber-600' : 'bg-green-600 border-green-400';
 
   return (
-    <div className="w-full mb-8">
-      <div className="flex justify-between relative">
+    <div className="w-full mb-8 overflow-x-auto custom-scrollbar pb-2">
+      <div className="flex justify-between relative min-w-[320px] px-2">
         <div className="absolute top-1/2 left-0 w-full h-1 bg-gray-700 -z-10 -translate-y-1/2 rounded"></div>
         {steps.map((s) => {
           const isActive = s.id === currentStep;

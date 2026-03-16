@@ -148,7 +148,7 @@ export const Step1Settings: React.FC<Props> = ({
         {/* EDITOR AREA (Visible only if script exists) */}
         {isEditorMode && (
           <div className="animate-slide-up flex flex-col gap-4 flex-1">
-             <div className="relative group w-full h-[850px]">
+             <div className="relative group w-full h-[500px] md:h-[850px]">
                <div className="absolute -inset-0.5 bg-gradient-to-br from-indigo-500/20 to-purple-500/20 rounded-xl blur opacity-50 group-hover:opacity-100 transition duration-1000"></div>
                <div className="relative h-full bg-[#161b22] border border-gray-800 rounded-xl overflow-hidden shadow-2xl flex flex-col">
                   <div className="h-10 border-b border-gray-800 bg-[#0d1117] flex items-center justify-between px-4 shrink-0">

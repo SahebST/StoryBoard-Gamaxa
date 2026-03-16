@@ -40,84 +40,84 @@ const AESTHETICS = [
   },
   { 
     label: 'Classic', 
-    prompt: 'Visual Style: Classic NotebookLM style. MANDATORY VISUALS: Flat vector-like colors, clean uniform lines, professional editorial composition. Neutral background. Clarity over clutter. Balanced and polished.',
+    prompt: 'Visual Style: Premium Editorial Vector Illustration. MANDATORY VISUALS: Clean, uniform geometric linework, flat minimalist color blocking, professional magazine layout. High-end aesthetic with balanced negative space. Sharp focus, high-resolution vector clarity, sophisticated color palette (e.g., Swiss Design influence).',
     desc: 'Balanced, editorial illustration.' 
   },
   { 
     label: 'Whiteboard', 
-    prompt: 'Visual Style: Whiteboard sketch aesthetic. MANDATORY VISUALS: Rough hand-drawn black marker lines, pure white background. Schematic arrows, circled text, handwritten labels. Focus on "process flow". Sparse accent colors (Red/Blue).',
+    prompt: 'Visual Style: Professional Schematic Whiteboard. MANDATORY VISUALS: High-resolution dry-erase marker texture, clean hand-drawn strokes on a pure white gloss surface. Schematic arrows, logical flowcharts, professional handwritten annotations. Sparse use of primary accent colors for emphasis. Realistic marker pressure and slight ink bleed.',
     desc: 'Minimalist diagrams & sketches.' 
   },
   { 
     label: 'Kawaii', 
-    prompt: 'Visual Style: Kawaii aesthetic. MANDATORY VISUALS: Soft pastel color palette (pinks, blues, mints), thick rounded linework, anthropomorphic objects with faces, sparkle effects. Friendly, safe, and simplified for children.',
+    prompt: 'Visual Style: Premium 3D Kawaii Pop. MANDATORY VISUALS: Volumetric soft-shading, subsurface scattering on rounded forms, pastel dreamscape palette. Expressive anthropomorphic characters, sparkle and heart particles. High-quality clay-like texture, soft ambient occlusion, cheerful and vibrant studio lighting.',
     desc: 'Cute, rounded, playful.' 
   },
   { 
     label: 'Anime', 
-    prompt: 'Visual Style: High-Fidelity Anime Art. MANDATORY VISUALS: Vibrant saturated colors, dramatic cinematic lighting (god rays, lens flare), cel-shaded detailing, dynamic camera angles (low/high tilt). "Makoto Shinkai" style background detail.',
+    prompt: 'Visual Style: Master-Level Cinematic Anime. MANDATORY VISUALS: Dynamic cel-shading, atmospheric god rays, cinematic lens flares, extreme depth of field. High-fidelity background art with intricate environmental details. Dynamic camera angles (extreme low/high tilt), vibrant saturated tones, Makoto Shinkai inspired lighting.',
     desc: 'Vibrant, expressive, dynamic.' 
   },
   { 
     label: 'Watercolour', 
-    prompt: 'Visual Style: Traditional Watercolour. MANDATORY VISUALS: Wet-on-wet technique, bleeding edges, visible paper texture, organic brush strokes. Soft gradients, dreamy atmosphere. No hard black lines.',
+    prompt: 'Visual Style: Professional Fine Art Watercolour. MANDATORY VISUALS: Heavy-grain cold-press paper texture, pigment granulation, wet-in-wet bleeding edges. Organic brush strokes, translucent layering, soft atmospheric gradients. No hard outlines, dreamy and ethereal lighting, artistic masterpiece quality.',
     desc: 'Soft, painterly, artistic.' 
   },
   { 
     label: 'Retro Print', 
-    prompt: 'Visual Style: 1970s Retro Print. MANDATORY VISUALS: Visible halftone dot pattern, aged yellowed paper texture, CMYK color shift/misalignment, muted vintage colors (mustard, teal, burnt orange). Look like an old science textbook.',
+    prompt: 'Visual Style: 1970s Vintage Educational Print. MANDATORY VISUALS: Authentic halftone dot patterns, aged yellowed paper grain, misaligned CMYK printing plates. Muted vintage palette (mustard, burnt orange, avocado green). Authentic ink bleed, distressed edges, science textbook aesthetic from the mid-century.',
     desc: 'Vintage, halftone, aged.' 
   },
   { 
     label: 'Heritage', 
-    prompt: 'Visual Style: Heritage Engraving. MANDATORY VISUALS: Cross-hatching shading, ink wash, parchment background, ornate borders, encyclopedic realism. Serious, historical, and academic tone.',
+    prompt: 'Visual Style: Heritage Copperplate Engraving. MANDATORY VISUALS: Fine-line cross-hatching, intricate ink wash, aged parchment background. Ornate Victorian borders, encyclopedic scientific realism. High-contrast black ink rendering, historical academic tone, museum-quality archival detail.',
     desc: 'Rich, ornate, traditional.' 
   },
   { 
     label: 'Paper Craft', 
-    prompt: 'Visual Style: 3D Paper Cutout Diorama. MANDATORY VISUALS: Distinct layers of colored paper, physical paper grain texture, soft drop shadows between layers to show depth. Tactile, handmade look. No outlines.',
+    prompt: 'Visual Style: Tactile 3D Paper-Cut Diorama. MANDATORY VISUALS: Distinct physical layers of textured cardstock, visible paper grain, soft drop shadows creating deep volumetric space. Tactile handmade aesthetic, professional studio lighting with soft shadows, vibrant layered composition, no digital outlines.',
     desc: 'Layered, textured 3D paper.' 
   },
 
   // --- New Advanced Styles ---
   { 
     label: 'Wireframe', 
-    prompt: 'Visual Style: WIREFRAME MESH. Core Intent: Expose structure & Technical transparency. Geometry Logic: Only edges and vertices visible, No solid surfaces, Triangular or quad polygon mesh, Grid-based topology. Color Logic: Monochrome neon cyan/white/lime on deep black background. Texture: Pure vector line rendering, Transparent surfaces. Lighting: Minimal edge glow only. Composition: 3D object centered, Rotational perspective.',
+    prompt: 'Visual Style: High-Tech Technical Wireframe. MANDATORY VISUALS: Luminous neon vector mesh, glowing vertices, triangular polygon topology. Deep space black background, transparent geometric surfaces. Minimalist edge glow, technical blueprint precision, 3D rotational perspective, cyber-grid aesthetic.',
     desc: 'Technical structure, neon mesh.' 
   },
   { 
     label: 'Bio-Fiber', 
-    prompt: 'Visual Style: BIO-FIBER. Core Intent: Organic structure & Living material. Geometry Logic: Branching networks, Veins/fibers/neural strands, Irregular curvature, No straight lines. Color Logic: Earth tones + bio glow, Soft greens/beige/amber. Texture: Fibrous, Slight translucency, Organic membrane surfaces. Lighting: Bioluminescent highlights, Subsurface scattering. Composition: Macro close-up, Dense layered structure.',
+    prompt: 'Visual Style: Microscopic Organic Bio-Fiber. MANDATORY VISUALS: Branching neural networks, bioluminescent pulses, translucent organic membranes. Fibrous textures, irregular biological curvature, subsurface scattering. Macro close-up perspective, earth tones with vibrant bio-glow accents, microscopic realism.',
     desc: 'Organic veins, living matter.' 
   },
   { 
     label: 'Glitch / HUD', 
-    prompt: 'Visual Style: GLITCH / HUD. Core Intent: Digital interface & Corrupted signal. Geometry Logic: Rectangular UI frames, Overlapping data layers, Grid alignment, Broken distortions. Color Logic: RGB separation, Neon cyan/magenta/red on Black background. Texture: Scanlines, Digital noise, Pixel distortion. Lighting: Screen glow, High contrast data points. Composition: Central subject, Floating UI around it.',
+    prompt: 'Visual Style: Digital Glitch & HUD Overlay. MANDATORY VISUALS: Chromatic aberration, scanline distortions, floating holographic UI elements. RGB signal separation, digital noise, pixelated artifacts. High-contrast data visualization, neon cyan and magenta accents on deep black, high-tech diagnostic interface.',
     desc: 'Cyberpunk UI, data distortion.' 
   },
   { 
     label: 'Hyper-Real 3D', 
-    prompt: 'Visual Style: HYPER-REAL 3D. Core Intent: Extreme realism beyond photography. Geometry Logic: Physically accurate proportions, Micro surface details, High poly modeling. Color Logic: Natural color grading, Cinematic tones, HDR. Texture: PBR materials, Skin pores/metal scratches. Lighting: Ray-traced lighting, Global illumination, Cinematic depth. Composition: DSLR framing, Bokeh depth-of-field.',
+    prompt: 'Visual Style: Unreal Engine 5.4 Photorealistic Render. MANDATORY VISUALS: Ray-traced global illumination, physically based rendering (PBR), 8k resolution textures. Micro-surface details (metal scratches, skin pores), cinematic depth of field (bokeh), HDR lighting, physically accurate materials and reflections.',
     desc: 'Cinematic photorealism.' 
   },
   { 
     label: 'Cybercore', 
-    prompt: 'Visual Style: CYBERCORE. Core Intent: High-tech dystopian aesthetic. Geometry Logic: Sharp edges, Industrial symmetry, Mechanical layering. Color Logic: Black base, Neon purple/electric blue, Chrome highlights. Texture: Metal panels, Carbon fiber, LED strips. Lighting: High contrast, Neon rim lighting, Fog haze. Composition: Aggressive perspective, Wide lens distortion.',
+    prompt: 'Visual Style: Industrial Cybercore Dystopia. MANDATORY VISUALS: Sharp mechanical edges, industrial symmetry, chrome and carbon fiber layering. Neon rim lighting, rainy night atmosphere with volumetric fog. High-contrast shadows, electric blue and purple accents, gritty high-tech urban aesthetic.',
     desc: 'Industrial neon dystopia.' 
   },
   { 
     label: 'Holography', 
-    prompt: 'Visual Style: HOLOGRAPHY. Core Intent: Projection of light as structure. Geometry Logic: Semi-transparent forms, Volumetric light grids, Floating projections. Color Logic: Cyan/blue dominant, Rainbow diffraction edges. Texture: Light particles, Thin-line rendering, Scan layer transparency. Lighting: Internal glow, Volumetric beams. Composition: Object floating mid-air, Dark environment.',
+    prompt: 'Visual Style: Volumetric Light Holography. MANDATORY VISUALS: Semi-transparent luminous forms, volumetric light grids, floating projections. Internal glow, light particles, scan-line transparency. Object floating in dark void, sci-fi projection aesthetic, shimmering interference patterns.',
     desc: 'Volumetric light projection.' 
   },
   { 
     label: 'Dark Fantasy', 
-    prompt: 'Visual Style: DARK FANTASY. Core Intent: Mythic + ominous atmosphere. Geometry Logic: Gothic shapes, Spires/twisted forms, Organic + medieval hybrid. Color Logic: Deep red, Charcoal, Muted gold, Cold blue shadows. Texture: Rough stone, Ancient metal, Smoke & ash. Lighting: Dramatic spotlight, High shadow contrast, Mist & fog. Composition: Central heroic subject, Strong vertical scale.',
+    prompt: 'Visual Style: Epic Cinematic Dark Fantasy. MANDATORY VISUALS: Gothic architecture, twisted organic forms, moody chiaroscuro lighting. Ethereal mist, ancient stone and rusted metal textures. Deep red and muted gold palette, mythic scale, ominous and heroic atmosphere, high-contrast shadows.',
     desc: 'Gothic, mythic, cinematic.' 
   },
   { 
     label: 'Psychedelic', 
-    prompt: 'Visual Style: PSYCHEDELIC. Core Intent: Perceptual distortion & Mind-expansion. Geometry Logic: Fractals, Infinite loops, Fluid morphing shapes. Color Logic: High saturation, Neon rainbow, Gradient waves. Texture: Liquid swirl, Pattern repetition, Optical illusions. Lighting: Self-glowing colors, No realistic shadows, Intense color bloom. Composition: Symmetry or kaleidoscope, Central focal vortex.',
+    prompt: 'Visual Style: Surreal Fractal Psychedelia. MANDATORY VISUALS: Infinite fractal loops, iridescent liquid swirls, mind-bending fluid geometry. High-saturation neon rainbow gradients, optical illusion patterns. Self-glowing colors, no realistic shadows, kaleidoscopic symmetry, transcendental visual experience.',
     desc: 'Fractal, vivid, distorted.' 
   },
 
@@ -284,9 +284,17 @@ export const Step3Images: React.FC<Props> = ({ script: initialScript, onScriptCh
     lastGeneratedConfig.aiDirection !== aiDirection
   );
 
+  const isLongScript = localScript.length > 8000;
+
   const handleGeneratePlan = async (type: 'visual' | 't2v', view: 'standard' | 'prompts') => {
     if (!localScript.trim()) return;
     
+    if (isLongScript) {
+        if (!window.confirm("This script is very long. Generating a visual plan might take a while or fail due to size limits. Continue anyway?")) {
+            return;
+        }
+    }
+
     // Check if we need to confirm destruction of existing images
     const hasGeneratedImages = scenes.some(s => s.imageUrl);
     if (scenes.length > 0 && hasGeneratedImages) {
@@ -758,10 +766,10 @@ export const Step3Images: React.FC<Props> = ({ script: initialScript, onScriptCh
                  const timeRange = `${Math.floor(startTime/60)}:${(startTime%60).toString().padStart(2,'0')} - ${Math.floor(endTime/60)}:${(endTime%60).toString().padStart(2,'0')}`;
                  
                  return (
-                   <div key={scene.id} className={`bg-[#111827] border border-gray-800 rounded-2xl overflow-hidden shadow-lg flex flex-col group hover:border-gray-700 transition-all ${viewMode === 'standard' ? 'xl:flex-row' : ''}`}>
+                   <div key={scene.id} className={`bg-[#111827] border border-gray-800 rounded-2xl overflow-hidden shadow-lg flex flex-col group hover:border-gray-700 transition-all ${viewMode === 'standard' ? 'lg:flex-row' : ''}`}>
                       
                       {/* Left: Info Panel (Script & Prompt) */}
-                      <div className={`p-6 flex flex-col justify-between border-b xl:border-b-0 bg-[#161b22]/50 relative ${viewMode === 'standard' ? 'xl:w-5/12 xl:border-r border-gray-800' : 'w-full'}`}>
+                      <div className={`p-4 sm:p-6 flex flex-col justify-between border-b lg:border-b-0 bg-[#161b22]/50 relative ${viewMode === 'standard' ? 'lg:w-5/12 lg:border-r border-gray-800' : 'w-full'}`}>
                          <div>
                             {/* Meta Badges */}
                             <div className="flex flex-wrap items-start gap-2 mb-4">
@@ -889,7 +897,7 @@ export const Step3Images: React.FC<Props> = ({ script: initialScript, onScriptCh
 
                       {/* Right: Image Canvas (Only in Standard Mode) */}
                       {viewMode === 'standard' && generationType === 'visual' && (
-                        <div className="xl:w-7/12 bg-black relative h-[350px] xl:h-[450px] overflow-hidden flex flex-row">
+                        <div className="lg:w-7/12 bg-black relative h-[350px] lg:h-[450px] overflow-hidden flex flex-row">
                             {scene.imageUrl ? (
                                 <>
                                 {/* Image Area */}

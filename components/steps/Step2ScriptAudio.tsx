@@ -76,7 +76,11 @@ export const Step2ScriptAudio: React.FC<Props> = ({
   };
 
   const handleSaveTxt = () => {
-    const safeTitle = title ? title.replace(/[^a-z0-9]/gi, '_').toLowerCase() : '';
+    let baseName = title;
+    if (!baseName && script) {
+      baseName = script.split(/\s+/).slice(0, 5).join('_');
+    }
+    const safeTitle = baseName ? baseName.trim().replace(/[^a-z0-9]+/gi, '_').toLowerCase() : '';
     const filename = safeTitle ? `${safeTitle}.txt` : `script_${new Date().toISOString().slice(0,10)}.txt`;
 
     const blob = new Blob([script], { type: "text/plain" });
@@ -90,11 +94,18 @@ export const Step2ScriptAudio: React.FC<Props> = ({
 
   const handleDownloadAudio = () => {
     if (!audioBase64) return;
+    
+    let baseName = title;
+    if (!baseName && script) {
+      baseName = script.split(/\s+/).slice(0, 5).join('_');
+    }
+    const safeTitle = baseName ? baseName.trim().replace(/[^a-z0-9]+/gi, '_').toLowerCase() : 'audio';
+    
     const blob = base64PCMToWavBlob(audioBase64, 24000);
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `audio_${new Date().toISOString().slice(0,19).replace(/:/g, "-")}.wav`;
+    a.download = `${safeTitle}.wav`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -262,7 +273,7 @@ export const Step2ScriptAudio: React.FC<Props> = ({
       </div>
 
       {/* 4. Script Editor (Dark Mode) - Moved Down */}
-      <div className="h-[500px] flex flex-col relative group rounded-lg overflow-hidden border border-gray-800/50 focus-within:ring-1 focus-within:ring-gray-700 bg-[#0d1117]">
+      <div className="h-[300px] md:h-[500px] flex flex-col relative group rounded-lg overflow-hidden border border-gray-800/50 focus-within:ring-1 focus-within:ring-gray-700 bg-[#0d1117]">
         {/* Header for Paste */}
         <div className="h-9 border-b border-gray-800 bg-[#161b22] flex items-center justify-between px-4 shrink-0">
             <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Script Source</span>

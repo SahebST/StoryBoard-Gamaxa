@@ -1,5 +1,6 @@
 
 import { GoogleGenAI, Modality, Type, Schema } from "@google/genai";
+import { jsonrepair } from "jsonrepair";
 import { ScriptSettings, Scene, SEOData, ScriptAnalysis } from "../types";
 
 // Helper to get AI instance
@@ -74,55 +75,31 @@ export const downloadFile = (blob: Blob, filename: string) => {
 
 export const generateScriptFromIdea = async (topic: string, tone: string): Promise<string> => {
   const ai = getAI();
+  const systemInstruction = `
+  You are an expert Short-Form Content Strategist and Scriptwriter. 
+  Your goal is to create high-retention, viral-ready scripts for TikTok, Reels, and YouTube Shorts.
+  
+  CORE PRINCIPLES:
+  - HOOK FIRST: The first 3 seconds must grab attention immediately.
+  - VALUE DENSITY: Every sentence must provide value, entertainment, or curiosity.
+  - PACING: Use punchy, rhythmic sentences. Avoid long, complex clauses.
+  - NARRATIVE: Use a compelling 3rd person narrative style unless specified otherwise.
+  `;
+
   const prompt = `
-  TASK: Write a compelling short-form video script (TikTok/Reels/Shorts) based on the topic below.
+  TASK: Write a compelling short-form video script based on the topic below.
   
   TOPIC: "${topic}"
   TONE: ${tone}
   
   CONSTRAINTS:
-  1. NARRATIVE STYLE: Use a 3rd Person Narrator perspective. (e.g., "He walked into the room..." or "The universe is expanding..."). Do not use "I" or "We" unless quoting someone.
-  2. LENGTH: 30 to 60 seconds spoken duration (approx 100-160 words).
-  3. FORMAT: Return ONLY the spoken words. Do not include visual directions, scene headers, or character names. Just the raw script text.
-  4. HOOK: Start with a strong hook in the first sentence.
-  `;
-
-  return callWithRetry(async () => {
-    const response = await ai.models.generateContent({
-      model: activeModel,
-      contents: prompt,
-    });
-    return response.text?.trim() || "";
-  });
-};
-
-export const analyzeScript = async (script: string): Promise<ScriptAnalysis> => {
-  const ai = getAI();
-  const prompt = `
-  TASK: Analyze this short-form video script (TikTok/Reels/Shorts).
-  
-  SCRIPT:
-  "${script}"
-
-  REQUIREMENTS:
-  1. Score it (0-100) based on engagement, hook quality, and retention.
-  2. Rate the Hook (First 3 seconds).
-  3. Check for Factual Errors. If none, return ["Verified. No factual errors found."].
-  4. Identify 2 key Strengths and 2 Weaknesses.
-  5. Provide one main Improvement Suggestion.
-
-  OUTPUT (Strict JSON):
-  {
-    "score": 85,
-    "hookRating": "Weak" | "Good" | "Viral",
-    "pacing": "Too Slow" | "Good" | "Too Fast",
-    "wordCount": 120,
-    "estimatedDuration": "45s",
-    "factCheck": ["Error 1...", "Error 2..."] or ["Verified..."],
-    "strengths": ["...", "..."],
-    "weaknesses": ["...", "..."],
-    "improvementSuggestion": "..."
-  }
+  1. NARRATIVE STYLE: 3rd Person Narrator (e.g., "In a world where...", "Most people think..."). No "I/We" unless quoting.
+  2. STRUCTURE: 
+     - [0-3s] The Hook: A bold statement or a question that stops the scroll.
+     - [3-45s] The Body: Rapid-fire facts, storytelling, or value points.
+     - [45-60s] The Outro: A quick summary or a subtle open loop.
+  3. LENGTH: 120-150 words (approx 45-55 seconds spoken).
+  4. FORMAT: Return ONLY the spoken words. No scene headers, no brackets, no visual cues.
   `;
 
   return callWithRetry(async () => {
@@ -130,13 +107,54 @@ export const analyzeScript = async (script: string): Promise<ScriptAnalysis> => 
       model: activeModel,
       contents: prompt,
       config: {
+        systemInstruction: systemInstruction,
+        temperature: 0.7, // Balanced creativity and focus
+      }
+    });
+    return response.text?.trim() || "";
+  });
+};
+
+export const analyzeScript = async (script: string): Promise<ScriptAnalysis> => {
+  const ai = getAI();
+  const systemInstruction = `
+  You are a Senior Script Analyst and Fact-Checker for a major media production house.
+  Your analysis must be objective, critical, and actionable.
+  
+  SCORING CRITERIA:
+  - Hook (0-30): Does it stop the scroll?
+  - Retention (0-40): Is the pacing consistent? Are there "lulls"?
+  - Clarity (0-30): Is the message easy to understand?
+  `;
+
+  const prompt = `
+  TASK: Perform a deep-dive analysis of this short-form script.
+  
+  SCRIPT:
+  "${script}"
+
+  REQUIREMENTS:
+  1. SCORE: Calculate a total score (0-100) based on the criteria.
+  2. HOOK RATING: Categorize the first 3 seconds as "Weak", "Good", or "Viral".
+  3. FACT CHECK: Identify any potential inaccuracies. Be specific. If perfect, return ["Verified. No factual errors found."].
+  4. STRENGTHS/WEAKNESSES: Provide 2 distinct points for each.
+  5. IMPROVEMENT: Suggest one specific structural or word-choice change.
+  `;
+
+  return callWithRetry(async () => {
+    const response = await ai.models.generateContent({
+      model: activeModel,
+      contents: prompt,
+      config: {
+        systemInstruction: systemInstruction,
+        maxOutputTokens: 8192,
         responseMimeType: 'application/json',
         responseSchema: {
           type: Type.OBJECT,
           properties: {
             score: { type: Type.NUMBER },
-            hookRating: { type: Type.STRING },
-            pacing: { type: Type.STRING },
+            hookRating: { type: Type.STRING, enum: ["Weak", "Good", "Viral"] },
+            pacing: { type: Type.STRING, enum: ["Too Slow", "Good", "Too Fast"] },
             wordCount: { type: Type.NUMBER },
             estimatedDuration: { type: Type.STRING },
             factCheck: { type: Type.ARRAY, items: { type: Type.STRING } },
@@ -151,7 +169,7 @@ export const analyzeScript = async (script: string): Promise<ScriptAnalysis> => 
 
     const text = response.text || "{}";
     try {
-      return JSON.parse(text);
+      return JSON.parse(jsonrepair(text));
     } catch (e) {
       console.error("Failed to parse analysis JSON", e);
       throw new Error("Analysis failed");
@@ -161,8 +179,12 @@ export const analyzeScript = async (script: string): Promise<ScriptAnalysis> => 
 
 export const improveScript = async (script: string, instruction: string): Promise<string> => {
   const ai = getAI();
+  const systemInstruction = `
+  You are a Script Doctor. Your job is to take an existing script and surgically improve it based on specific feedback while preserving its core message and tone.
+  `;
+
   const prompt = `
-  TASK: Improve this video script based on the instruction.
+  TASK: Rewrite this script to address the following instruction.
   
   ORIGINAL SCRIPT:
   "${script}"
@@ -171,15 +193,19 @@ export const improveScript = async (script: string, instruction: string): Promis
   "${instruction}"
 
   CONSTRAINTS:
-  - Keep it in spoken word format.
-  - Maintain the original topic.
-  - Output ONLY the new script text. No intro/outro.
+  - Maintain the 3rd person narrative style.
+  - Keep the word count between 120-160 words.
+  - Output ONLY the spoken text.
   `;
 
   return callWithRetry(async () => {
     const response = await ai.models.generateContent({
       model: activeModel,
       contents: prompt,
+      config: {
+        systemInstruction: systemInstruction,
+        temperature: 0.6,
+      }
     });
     return response.text?.trim() || script;
   });
@@ -187,20 +213,34 @@ export const improveScript = async (script: string, instruction: string): Promis
 
 export const generateViralHooks = async (topic: string): Promise<string[]> => {
   const ai = getAI();
+  const systemInstruction = `
+  You are a Viral Marketing Expert specializing in "Scroll-Stopping" hooks. 
+  You understand psychological triggers like curiosity gaps, loss aversion, and authority.
+  `;
+
   const prompt = `
-  TASK: Write 5 distinct, scroll-stopping "Viral Hooks" for a short-form video about: "${topic}".
+  TASK: Write 5 distinct, high-CTR hooks for a video about: "${topic}".
+  
+  STRATEGIES TO USE:
+  1. The Curiosity Gap: "The one thing everyone gets wrong about..."
+  2. The Negative Hook: "Stop doing [common thing] if you want [result]."
+  3. The Authority Hook: "I spent 100 hours researching [topic] so you don't have to."
+  4. The Transformation Hook: "How [topic] changed everything for [person/group]."
+  5. The Listicle Hook: "3 secrets about [topic] that feel illegal to know."
   
   RULES:
-  - Each hook must be under 15 words.
-  - Use patterns like "Stop doing this", "The secret to...", "I tried...", "Why everyone is wrong about...".
-  - Make them catchy and high-click-through (clickbait but honest).
-  - No intro text. Just the 5 hooks separated by newlines.
+  - Under 15 words per hook.
+  - No intro text. Just the 5 hooks.
   `;
 
   return callWithRetry(async () => {
       const response = await ai.models.generateContent({
         model: activeModel,
         contents: prompt,
+        config: {
+          systemInstruction: systemInstruction,
+          temperature: 0.8,
+        }
       });
       const text = response.text || "";
       // Clean up the output (remove bullets, numbers)
@@ -256,45 +296,41 @@ export const segmentScript = async (
   let durationContext = "";
   if (totalDuration) {
     durationContext = `
-    CRITICAL INSTRUCTION - TOTAL DURATION:
-    The user requires the video to be EXACTLY ${totalDuration} seconds long.
-    You MUST plan the segments so their 'duration' values sum up to approximately ${totalDuration}.
+    CRITICAL PRODUCTION CONSTRAINT - TOTAL DURATION:
+    The target video length is EXACTLY ${totalDuration} seconds.
+    You MUST architect the visual segments so their combined 'duration' values sum up to precisely ${totalDuration}s.
     
-    Guidance:
-    - If the script is short, extend the duration of visual segments (e.g. slow motion, lingering shots).
-    - If the script is long, tighten the duration (fast cuts).
-    - Verify your math: Sum of all 'duration' fields MUST equal ${totalDuration} (within 1-2s margin).
+    STRATEGIC GUIDANCE:
+    - **Temporal Expansion**: If the script is concise, extend visual segments with cinematic slow-motion or lingering environmental shots to reach the target duration.
+    - **Temporal Compression**: If the script is dense, use rapid-fire editing and tight cuts to maintain high energy while fitting the timeframe.
+    - **Mathematical Precision**: The sum of all 'duration' fields MUST equal ${totalDuration} (tolerance: ±0.5s).
     `;
   }
 
   // 2. Strict Pacing Logic
   let specificPacingInstruction = "";
   if (pacing.includes("Fixed")) {
-    // Extract X from "Fixed Xs Intervals" (e.g. 3, 4, 5)
     const seconds = pacing.match(/(\d+)s/)?.[1] || "3"; 
     specificPacingInstruction = `
-    STRICT PACING MODE: Fixed ${seconds} Second Intervals.
-    1. Divide the script into segments that take EXACTLY ${seconds} seconds.
-    2. The 'duration' field for EVERY segment must be ${seconds} (float is okay, e.g. ${seconds}.0).
-    3. Ignore natural sentence boundaries if necessary to maintain this fixed rhythm.
+    STRICT RHYTHMIC MODE: Fixed ${seconds} Second Intervals.
+    - **Rhythmic Uniformity**: Divide the narrative into segments that take EXACTLY ${seconds}.0 seconds each.
+    - **Duration Rigidity**: Every segment's 'duration' field MUST be ${seconds}.0.
+    - **Creative Sacrifice**: Prioritize the fixed rhythm over natural sentence breaks if necessary to achieve a "staccato" or "metronomic" visual style.
     `;
   } else {
-    // Adaptive Flow
     if (totalDuration) {
          specificPacingInstruction = `
-        PACING STRATEGY: Fit to ${totalDuration}s.
-        1. Break the script into logical visual segments.
-        2. Allocate time to each segment based on the density of information.
-        3. Ensure the total time accumulates to exactly ${totalDuration}s.
-        4. If necessary to reach ${totalDuration}s, allow individual segments to be longer (up to 8s).
+        PACING ARCHITECTURE: Fit to ${totalDuration}s (Adaptive).
+        - **Logical Flow**: Break the script into segments based on narrative beats.
+        - **Dynamic Allocation**: Distribute the ${totalDuration}s total time based on the importance and complexity of each segment.
+        - **Retention Optimization**: Ensure no single segment exceeds 8s to prevent viewer drop-off.
         `;
     } else {
         specificPacingInstruction = `
-        ADAPTIVE FAST-PACED EDITING:
-        1. GLOBAL CONSTRAINT: Every visual segment MUST have a duration between 1.0 seconds and 5.0 seconds. NO EXCEPTIONS.
-        2. If a sentence is long, you MUST split it into multiple visual segments of 2-4 seconds each.
-        3. If a phrase is very short (under 1s), merge it with the adjacent phrase.
-        4. Ideal Target: Aim for a varied rhythm averaging 3 seconds per segment to maintain high engagement (TikTok/Shorts style).
+        ADAPTIVE HIGH-RETENTION EDITING (Social Media Optimized):
+        - **The 5-Second Rule**: Every visual segment MUST have a duration between 1.5 and 5.0 seconds. 
+        - **Micro-Segmentation**: Long sentences MUST be broken into multiple visual beats (2-4s each).
+        - **Engagement Rhythm**: Aim for a varied, punchy rhythm that keeps the viewer's eyes moving.
         `;
     }
   }
@@ -304,54 +340,67 @@ export const segmentScript = async (
   if (mode === 't2v') {
      promptEngineeringSection = `
 4. **Prompt Engineering (Text-to-Video Focus)**:
-   - **'text_to_video_prompt' (PRIORITY)**: Write a comprehensive, standalone prompt for video generation (Sora/Kling/Gen-3). Must include: Subject appearance, Action/Movement, Environment, Lighting, Camera Angle, and Style.
-   - 'final_image_prompt': A static reference image prompt matching the video style.
-   - 'image_to_video_prompt': A concise motion description (e.g., "Drone shot", "Tracking shot").
+   - **'text_to_video_prompt' (PRIORITY)**: Write a high-fidelity, cinematic prompt for advanced video models (Sora/Kling/Gen-3). 
+     Structure: [Subject] [Action/Movement] in [Environment]. [Lighting/Atmosphere], [Camera Angle/Movement], [Visual Style].
+     Example: "A futuristic scientist operating a holographic interface in a dark, neon-lit lab. Cinematic lighting, slow dolly zoom, hyper-realistic 8k digital art style, fluid motion, high frame rate."
+   - 'final_image_prompt': A high-resolution reference frame prompt that captures the peak visual moment.
+   - 'image_to_video_prompt': Specific motion vectors and physical dynamics (e.g., "Fluid motion, 4k resolution, cinematic pan, realistic physics").
      `;
   } else {
      promptEngineeringSection = `
-4. **Prompt Engineering (Static Image + Animation Focus)**:
-   - **'final_image_prompt' (PRIORITY)**: Write a detailed static image prompt. START with the *Visual Style Name*. Follow with Subject, Labeling Logic (if structure/process), and Composition.
-   - **'image_to_video_prompt' (PRIORITY)**: Describe 2-5 words of camera motion or subject animation to turn this static image into a video (e.g., "Slow zoom in", "Pan left", "Particles floating").
-   - 'text_to_video_prompt': A standalone video prompt as backup.
+4. **Prompt Engineering (Image + Motion Focus)**:
+   - **'final_image_prompt' (PRIORITY)**: Write a professional, descriptive prompt for high-end image generation. 
+     Structure: [Style Name] style, [Subject] [Composition] [Lighting]. [Technical Details: Lens, Aperture, Render Engine].
+     Example: "Cyberpunk style, a detailed circuit board with glowing golden traces, macro close-up, soft bokeh, volumetric lighting, unreal engine 5 render, ray-traced reflections, 8k resolution."
+   - **'image_to_video_prompt' (PRIORITY)**: Describe the *Camera Dynamics* and *Atmospheric Motion*. Use 4-8 words. 
+     Examples: "Slow cinematic zoom in with particles", "Smooth tracking shot right, gentle sway", "Subtle atmospheric particles moving, light rays", "Gentle focus pull from foreground to background".
+   - 'text_to_video_prompt': A standalone cinematic video prompt as a fallback for hybrid workflows.
      `;
   }
 
   // Use the advanced "Educational Visual Architect" system instruction
   const systemInstruction = `
-You are an expert Educational Visual Architect, modeled after the sophisticated visual logic of advanced notebooking AIs.
+You are an elite Visual Content Director and Storyboard Artist. Your goal is to translate a script into a world-class visual production plan optimized for high-retention social media content.
 
-GOAL: Convert an educational script into a structured visual plan with a consistent, authoritative visual language.
+VISUAL DIRECTIVES:
+- **Style Consistency**: Every prompt MUST be anchored in the provided Visual Protocol. Do not deviate from the core aesthetic.
+- **Cinematic Composition**: Use professional camera terminology (e.g., Rule of Thirds, Leading Lines, Dutch Angle, Low Angle, Extreme Close-Up).
+- **Lighting Mastery**: Always specify lighting conditions to set the mood (e.g., Golden Hour, Rim Lighting, High-Key, Moody, Volumetric, Cyberpunk Neon).
+- **Color Theory**: Mention specific color palettes or accents that align with the tone (e.g., "Teal and Orange", "Monochromatic with Red accents").
 
 ---
 CORE VISUAL PROTOCOL:
 ${visualStylePrompt}
 ---
 
-PACING & TIMING RULES (CRITICAL):
+PACING & DURATION STRATEGY:
 ${durationContext}
 ${specificPacingInstruction}
 
 ---
-SMART LABELING & DIAGRAMMING LOGIC:
-1. IF Classification is "Structure" or "Process":
-   - The visual MUST be a "Labeled Diagram", "Schematic", or "Annotated Chart".
-   - You MUST explicitly include instructions for labels in the 'final_image_prompt'.
-   - Examples: "Include clear text labels for the nucleus and mitochondria", "Annotate the flow of energy with arrows and text".
-   - Match the label style to the aesthetic (e.g., "Handwritten labels" for Whiteboard, "Bold Serif Typography" for Retro).
+SEGMENTATION LOGIC:
+1. **Visual Rhythm**: Ensure a dynamic mix of wide, medium, and close-up shots to maintain viewer interest. Avoid visual monotony.
+2. **Transition Awareness**: Each segment should logically flow into the next. Consider "Match Cuts" or "Wipe Transitions" in your descriptions.
+3. **Information Density**: Match visual complexity to the complexity of the script segment. Use simpler visuals for fast-paced segments and detailed diagrams for slow-paced ones.
 
-2. IF Classification is "Abstract" or "Comparison":
-   - Avoid heavy text. Use visual metaphors.
-   - Use iconography to represent concepts.
+---
+SMART ANNOTATION LOGIC:
+- IF Classification is "Structure" or "Process":
+  - The visual MUST be an "Annotated Diagram", "Exploded View", or "Schematic".
+  - Explicitly describe labels: "Include clean, minimalist text labels for [Key Components] using a professional sans-serif typeface. Ensure labels are legible and well-spaced."
+
+---
+PROMPT QUALITY STANDARDS:
+- NO generic terms like "good", "nice", or "cool".
+- USE technical terms: "Ray-traced", "Anamorphic lens", "Depth of field", "Color graded", "Subsurface scattering", "Global illumination".
+- 'image_to_video_prompt' MUST focus on *camera movement* or *subtle subject motion* to avoid AI warping artifacts.
 
 ---
 STAGES OF PRODUCTION:
-1. **Semantic Analysis**: Extract core concepts (Structure, Process, Comparison, Abstract).
-2. **Segmentation**: Break down the script into segments strictly following the PACING RULES above.
-3. **Architecture Planning**: Define the layout (Split, Center, Flow, Grid) and visual hierarchy.
+1. **Conceptual Mapping**: Identify the core visual metaphor or literal representation for each segment.
+2. **Temporal Allocation**: Assign precise durations following the PACING RULES to ensure the video hits the target length.
+3. **Prompt Synthesis**: Generate high-fidelity prompts using the structures provided below.
 ${promptEngineeringSection}
-
-Output JSON format with 'visual_segments' array.
   `;
 
   // Append user instruction if provided
@@ -398,6 +447,7 @@ Output JSON format with 'visual_segments' array.
       contents: script,
       config: {
         systemInstruction: finalSystemInstruction,
+        maxOutputTokens: 16384,
         responseMimeType: 'application/json',
         responseSchema: schema,
       }
@@ -406,10 +456,10 @@ Output JSON format with 'visual_segments' array.
     const text = cleanJSON(response.text || "{}");
     let data;
     try {
-        data = JSON.parse(text);
-    } catch(e) {
-        console.error("Failed to parse segment JSON", e);
-        throw new Error("Segmentation failed");
+        data = JSON.parse(jsonrepair(text));
+    } catch(e: any) {
+        console.error("Failed to parse segment JSON", e, "Raw text sample:", text.slice(-100));
+        throw new Error(`Segmentation failed: ${e.message || "Invalid JSON structure"}`);
     }
 
     if (!data.visual_segments) return [];
@@ -465,51 +515,39 @@ export const generateSEO = async (script: string, audience: string, tone: string
     const ai = getAI();
     
     // Expert Persona Prompt
+    const systemInstruction = `
+    You are an elite YouTube and TikTok Algorithm Specialist. 
+    Your expertise is in Click-Through Rate (CTR) optimization, Search Engine Optimization (SEO), and viewer psychology.
+    `;
+
     const prompt = `
-    ROLE: You are an elite YouTube/TikTok Algorithm Specialist. Your goal is to maximize CTR (Click-Through Rate) and Watch Time for the following video script.
+    TASK: Maximize the reach of this video script through optimized metadata.
 
     INPUT SCRIPT:
     "${script.slice(0, 3000)}"
-
+ 
     AUDIENCE PROFILE: ${audience}
     TONE: ${tone}
-
-    TASK:
-    1. **Titles (4 Distinct Strategies)**:
-       - *Viral/Clickbait*: High curiosity, open loop (e.g., "Stop Doing This...").
-       - *SEO Optimized*: Keyword-heavy for search traffic.
-       - *Emotional/Benefit*: Focuses on the user's pain or desire.
-       - *Short/Punchy*: Under 40 characters, bold.
-
-    2. **Description (Highly Detailed)**:
-       - *The Hook*: First 2 lines must grab attention.
-       - *Summary*: A compelling breakdown of the video content.
-       - *CTA*: A call to action.
-
-    3. **Context Expansion (Deep Dive)**:
-       - Identify 2-3 complex or interesting concepts mentioned in the script that were too short to explain fully.
-       - Write a "Deep Dive" section explaining these concepts in detail (2-3 paragraphs) to add value in the description.
-       - This is crucial for "Search Generative Experience" (SGE) optimization.
-
-    4. **Hashtags**: 10-15 high-volume, niche-specific tags.
-
-    5. **Keywords**: 15-20 LSI (Latent Semantic Indexing) keywords for metadata.
-
-    OUTPUT FORMAT (Strict JSON):
-    {
-       "titles": ["Title 1", "Title 2", "Title 3", "Title 4"],
-       "description": "Full description text...",
-       "contextExpansion": "Header: Deep Dive... [Detailed explanation of missed points]...",
-       "hashtags": ["#tag1", "#tag2", ...],
-       "keywords": ["keyword1", "keyword2", ...]
-    }
+ 
+    REQUIREMENTS:
+    1. TITLES: Provide 4 distinct strategies:
+       - Viral: High curiosity, open loop.
+       - SEO: Keyword-rich for search.
+       - Emotional: Focuses on user benefit/pain.
+       - Punchy: Short, bold, under 40 chars.
+    2. DESCRIPTION: Include a hook, a summary, and a CTA.
+    3. CONTEXT EXPANSION: Identify 2-3 complex topics from the script and explain them in detail (2-3 paragraphs each) to provide extra value and boost SEO ranking.
+    4. HASHTAGS: 10-15 relevant tags.
+    5. KEYWORDS: 15-20 LSI keywords.
     `;
-
+ 
     return callWithRetry(async () => {
         const response = await ai.models.generateContent({
             model: activeModel,
             contents: prompt,
             config: {
+                systemInstruction: systemInstruction,
+                maxOutputTokens: 8192,
                 responseMimeType: 'application/json',
                 responseSchema: {
                     type: Type.OBJECT,
@@ -536,7 +574,12 @@ export const generateSEO = async (script: string, audience: string, tone: string
         });
         
         const text = cleanJSON(response.text || "{}");
-        return JSON.parse(text) as SEOData;
+        try {
+            return JSON.parse(jsonrepair(text)) as SEOData;
+        } catch (e: any) {
+            console.error("Failed to parse SEO JSON", e, "Raw text sample:", text.slice(-100));
+            throw new Error(`SEO Generation failed: ${e.message || "Invalid JSON structure"}`);
+        }
     });
 };
 

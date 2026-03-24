@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { VOICES } from '../../constants';
-import { base64PCMToWavBlob } from '../../services/geminiService';
+import { base64PCMToWavBlob, generateMusicPrompt } from '../../services/geminiService';
 import { ScriptSettings } from '../../types';
 
 interface Props {
@@ -16,12 +16,23 @@ interface Props {
   isSegmenting?: boolean;
   selectedVoiceName?: string | null; // New prop from App
   title?: string;
+  
+  // New props for music config
+  musicPrompt: string;
+  onMusicPromptChange: (prompt: string) => void;
+  musicStyle: string;
+  onMusicStyleChange: (style: string) => void;
+  musicIntensity: string;
+  onMusicIntensityChange: (intensity: string) => void;
+  isGeneratingMusic: boolean;
+  onGenerateMusicPrompt: (isRegeneration: boolean) => void;
 }
 
 export const Step2ScriptAudio: React.FC<Props> = ({ 
   script, durationStr, settings, onScriptChange, onRegenerateScript, 
   onGenerateAudio, audioBase64, isGeneratingAudio, onNext, isSegmenting,
-  selectedVoiceName, title
+  selectedVoiceName, title,
+  musicPrompt, onMusicPromptChange, musicStyle, onMusicStyleChange, musicIntensity, onMusicIntensityChange, isGeneratingMusic, onGenerateMusicPrompt
 }) => {
   const [selectedVoice, setSelectedVoice] = useState(VOICES[0]);
   const [isVoiceDropdownOpen, setIsVoiceDropdownOpen] = useState(false);
@@ -128,6 +139,24 @@ export const Step2ScriptAudio: React.FC<Props> = ({
       return;
     }
     onNext();
+  };
+
+  const handleCopyMusicPrompt = () => {
+    if (musicPrompt) {
+      navigator.clipboard.writeText(musicPrompt);
+      // Optional: Add a toast notification here
+    }
+  };
+
+  const handleExportMusicPrompt = () => {
+    if (!musicPrompt) return;
+    const blob = new Blob([musicPrompt], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `music_prompt_${new Date().toISOString().slice(0,10)}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   return (
@@ -294,6 +323,83 @@ export const Step2ScriptAudio: React.FC<Props> = ({
         />
         <div className="absolute bottom-4 right-4 text-xs text-gray-600 pointer-events-none z-20">
            {script.split(/\s+/).filter(Boolean).length} words
+        </div>
+      </div>
+
+      {/* 5. Music Prompt Generator */}
+      <div className="bg-[#0d1117] border border-gray-800 rounded-xl p-4 flex flex-col gap-4 shadow-lg transition-all">
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-bold text-white flex items-center gap-2">
+            🎵 Music Prompt
+          </h3>
+          <div className="flex items-center gap-3">
+             <select 
+               value={musicStyle} 
+               onChange={(e) => onMusicStyleChange(e.target.value)}
+               className="bg-[#161b22] border border-gray-700 text-xs text-gray-300 rounded px-2 py-1 focus:outline-none"
+             >
+               <option value="Auto">Auto</option>
+               <option value="Cinematic">Cinematic</option>
+               <option value="Sci-fi">Sci-fi</option>
+               <option value="Lo-fi">Lo-fi</option>
+               <option value="Educational">Educational</option>
+             </select>
+             <select 
+               value={musicIntensity} 
+               onChange={(e) => onMusicIntensityChange(e.target.value)}
+               className="bg-[#161b22] border border-gray-700 text-xs text-gray-300 rounded px-2 py-1 focus:outline-none"
+             >
+               <option value="Calm">Calm</option>
+               <option value="Balanced">Balanced</option>
+               <option value="High Energy">High Energy</option>
+             </select>
+          </div>
+        </div>
+
+        <textarea
+          readOnly
+          value={musicPrompt}
+          placeholder="Generated music prompt will appear here..."
+          className="w-full bg-[#161b22] border border-gray-700 rounded-lg p-3 text-sm text-gray-300 focus:outline-none resize-none h-24 custom-scrollbar"
+        />
+
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={() => onGenerateMusicPrompt(false)}
+            disabled={isGeneratingMusic || !script.trim()}
+            className="px-4 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-500 rounded-md transition-colors disabled:opacity-50 flex items-center gap-2"
+          >
+            {isGeneratingMusic ? (
+              <>
+                <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                Generating...
+              </>
+            ) : "Generate Prompt"}
+          </button>
+          
+          {musicPrompt && (
+            <>
+              <button
+                onClick={() => onGenerateMusicPrompt(true)}
+                disabled={isGeneratingMusic}
+                className="px-4 py-2 text-xs font-bold text-gray-300 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-md transition-colors disabled:opacity-50"
+              >
+                Regenerate
+              </button>
+              <button
+                onClick={handleCopyMusicPrompt}
+                className="px-4 py-2 text-xs font-bold text-teal-400 bg-teal-900/10 hover:bg-teal-900/30 border border-teal-900/50 rounded-md transition-colors"
+              >
+                Copy
+              </button>
+              <button
+                onClick={handleExportMusicPrompt}
+                className="px-4 py-2 text-xs font-bold text-gray-400 bg-gray-800/50 hover:bg-gray-700 border border-gray-700 rounded-md transition-colors"
+              >
+                Export .TXT
+              </button>
+            </>
+          )}
         </div>
       </div>
 

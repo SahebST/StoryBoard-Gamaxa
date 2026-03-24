@@ -10,6 +10,14 @@ interface Props {
   onUpdateScenes: (scenes: Scene[]) => void;
   onUpdateSingleScene: (scene: Scene) => void;
   onNext: () => void;
+  
+  // New props for image config
+  aiDirection: string;
+  onAiDirectionChange: (dir: string) => void;
+  durationMode: 'auto' | 'custom';
+  onDurationModeChange: (mode: 'auto' | 'custom') => void;
+  customDuration: string;
+  onCustomDurationChange: (dur: string) => void;
 }
 
 const ASPECT_RATIOS = [
@@ -212,7 +220,10 @@ const SelectButton: React.FC<{
   </button>
 );
 
-export const Step3Images: React.FC<Props> = ({ script: initialScript, onScriptChange, scenes, onUpdateScenes, onUpdateSingleScene, onNext }) => {
+export const Step3Images: React.FC<Props> = ({ 
+  script: initialScript, onScriptChange, scenes, onUpdateScenes, onUpdateSingleScene, onNext,
+  aiDirection, onAiDirectionChange, durationMode, onDurationModeChange, customDuration, onCustomDurationChange
+}) => {
   const [localScript, setLocalScript] = useState(initialScript);
   
   // viewMode: 'standard' (Prompt + Image) or 'prompts' (Text Prompts Only)
@@ -243,12 +254,7 @@ export const Step3Images: React.FC<Props> = ({ script: initialScript, onScriptCh
   const [activeAesthetic, setActiveAesthetic] = useState("Auto-select");
   const [customAesthetic, setCustomAesthetic] = useState("");
   const [activePacing, setActivePacing] = useState("Adaptive Flow (Auto)");
-  const [aiDirection, setAiDirection] = useState("");
   
-  // Duration Configuration
-  const [durationMode, setDurationMode] = useState<'auto' | 'custom'>('auto');
-  const [customDuration, setCustomDuration] = useState<string>("");
-
   // Track last used config to show "Regenerate" vs "Update" state
   const [lastGeneratedConfig, setLastGeneratedConfig] = useState<{aesthetic: string, pacing: string, duration: string, aiDirection: string} | null>(null);
 
@@ -527,7 +533,7 @@ export const Step3Images: React.FC<Props> = ({ script: initialScript, onScriptCh
             <SectionHeader label="05 — Script Duration" />
             <div className="flex flex-col md:flex-row gap-4">
                 <button
-                    onClick={() => setDurationMode('auto')}
+                    onClick={() => onDurationModeChange('auto')}
                     className={`flex-1 py-3 px-4 rounded-xl border text-xs font-bold uppercase tracking-wide transition-all ${durationMode === 'auto' ? 'bg-indigo-600/20 border-indigo-500 text-white' : 'bg-[#161b22] border-gray-800 text-gray-500 hover:bg-[#1c222b]'}`}
                 >
                     Auto (AI Estimate)
@@ -535,7 +541,7 @@ export const Step3Images: React.FC<Props> = ({ script: initialScript, onScriptCh
                 
                 <div className={`flex-1 flex items-center gap-2 rounded-xl border p-1 transition-all ${durationMode === 'custom' ? 'bg-indigo-600/10 border-indigo-500' : 'bg-[#161b22] border-gray-800'}`}>
                     <button
-                        onClick={() => setDurationMode('custom')}
+                        onClick={() => onDurationModeChange('custom')}
                         className={`px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wide transition-all ${durationMode === 'custom' ? 'bg-indigo-600 text-white' : 'text-gray-500 hover:text-gray-300'}`}
                     >
                         Custom
@@ -543,7 +549,7 @@ export const Step3Images: React.FC<Props> = ({ script: initialScript, onScriptCh
                     <input 
                         type="number"
                         value={customDuration}
-                        onChange={(e) => { setCustomDuration(e.target.value); setDurationMode('custom'); }}
+                        onChange={(e) => { onCustomDurationChange(e.target.value); onDurationModeChange('custom'); }}
                         placeholder="Secs"
                         className="bg-transparent text-white font-mono text-sm w-full focus:outline-none px-2"
                         disabled={durationMode !== 'custom'}
@@ -559,7 +565,7 @@ export const Step3Images: React.FC<Props> = ({ script: initialScript, onScriptCh
            <div className="bg-[#161b22] border border-gray-800 rounded-xl p-4 focus-within:ring-1 focus-within:ring-indigo-500/50 transition-all">
                <textarea
                    value={aiDirection}
-                   onChange={(e) => setAiDirection(e.target.value)}
+                   onChange={(e) => onAiDirectionChange(e.target.value)}
                    placeholder="Optional: Provide specific visual instructions (e.g. 'Dark and moody lighting', 'Use a specific color palette', 'Focus on character expressions')..."
                    className="w-full bg-transparent text-sm text-gray-300 focus:outline-none resize-none h-20 placeholder-gray-600 custom-scrollbar"
                />

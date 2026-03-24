@@ -23,7 +23,8 @@ import {
   downloadFile,
   base64PCMToWavBlob,
   generateScriptFromIdea,
-  setActiveModel
+  setActiveModel,
+  generateMusicPrompt
 } from './services/geminiService';
 
 const wait = (ms: number) => new Promise(res => setTimeout(res, ms));
@@ -39,11 +40,18 @@ const App: React.FC = () => {
     selectedVoice: null,
     scenes: [],
     seoData: null,
+    musicPrompt: "",
+    musicStyle: "Auto",
+    musicIntensity: "Balanced",
+    aiDirection: "",
+    durationMode: 'auto',
+    customDuration: "",
     isAnalyzing: false,
     isImproving: false,
     isGeneratingAudio: false,
     isGeneratingSEO: false,
     isSegmenting: false,
+    isGeneratingMusic: false,
   });
 
   const [currentModel, setCurrentModel] = useState("gemini-2.0-flash");
@@ -206,7 +214,13 @@ const App: React.FC = () => {
         audioBase64: state.audioBase64,
         selectedVoice: state.selectedVoice,
         scenes: state.scenes,
-        seoData: state.seoData
+        seoData: state.seoData,
+        musicPrompt: state.musicPrompt,
+        musicStyle: state.musicStyle,
+        musicIntensity: state.musicIntensity,
+        aiDirection: state.aiDirection,
+        durationMode: state.durationMode,
+        customDuration: state.customDuration
       }
     };
     
@@ -269,11 +283,18 @@ const App: React.FC = () => {
             selectedVoice: null,
             scenes: [],
             seoData: null,
+            musicPrompt: "",
+            musicStyle: "Auto",
+            musicIntensity: "Balanced",
+            aiDirection: "",
+            durationMode: 'auto',
+            customDuration: "",
             isAnalyzing: false,
             isImproving: false,
             isGeneratingAudio: false,
             isGeneratingSEO: false,
             isSegmenting: false,
+            isGeneratingMusic: false,
         };
 
         setState({
@@ -310,11 +331,18 @@ const App: React.FC = () => {
         selectedVoice: null,
         scenes: [],
         seoData: null,
+        musicPrompt: "",
+        musicStyle: "Auto",
+        musicIntensity: "Balanced",
+        aiDirection: "",
+        durationMode: 'auto',
+        customDuration: "",
         isAnalyzing: false,
         isImproving: false,
         isGeneratingAudio: false,
         isGeneratingSEO: false,
         isSegmenting: false,
+        isGeneratingMusic: false,
       });
     }
   };
@@ -430,6 +458,23 @@ const App: React.FC = () => {
               isSegmenting={state.isSegmenting}
               selectedVoiceName={state.selectedVoice}
               title={state.topic}
+              musicPrompt={state.musicPrompt}
+              onMusicPromptChange={(p) => setState(prev => ({...prev, musicPrompt: p}))}
+              musicStyle={state.musicStyle}
+              onMusicStyleChange={(s) => setState(prev => ({...prev, musicStyle: s}))}
+              musicIntensity={state.musicIntensity}
+              onMusicIntensityChange={(i) => setState(prev => ({...prev, musicIntensity: i}))}
+              isGeneratingMusic={state.isGeneratingMusic}
+              onGenerateMusicPrompt={async (isRegeneration) => {
+                setState(prev => ({ ...prev, isGeneratingMusic: true }));
+                try {
+                  const prompt = await generateMusicPrompt(state.scriptText, state.musicStyle, state.musicIntensity, isRegeneration);
+                  setState(prev => ({ ...prev, musicPrompt: prompt, isGeneratingMusic: false }));
+                } catch (e) {
+                  alert("Failed to generate music prompt. Try again.");
+                  setState(prev => ({ ...prev, isGeneratingMusic: false }));
+                }
+              }}
             />
           )}
 
@@ -441,6 +486,12 @@ const App: React.FC = () => {
               onUpdateScenes={handleUpdateScenes}
               onUpdateSingleScene={handleUpdateScenesSingle}
               onNext={handleGoToSEO}
+              aiDirection={state.aiDirection}
+              onAiDirectionChange={(d) => setState(prev => ({...prev, aiDirection: d}))}
+              durationMode={state.durationMode}
+              onDurationModeChange={(m) => setState(prev => ({...prev, durationMode: m}))}
+              customDuration={state.customDuration}
+              onCustomDurationChange={(d) => setState(prev => ({...prev, customDuration: d}))}
             />
           )}
 

@@ -258,10 +258,8 @@ export const generateAudio = async (text: string, voiceName: string): Promise<st
   
   try {
     return await callWithRetry(async () => {
-      // NOTE: We keep Audio generation fixed to 'gemini-2.0-flash' as it has stable audio output support.
-      // 'pro' models might not support Modality.AUDIO response yet.
       const response = await ai.models.generateContent({
-        model: "gemini-2.0-flash",
+        model: "gemini-2.5-flash-preview-tts",
         contents: [{ parts: [{ text: text }] }],
         config: {
           responseModalities: [Modality.AUDIO],
@@ -277,6 +275,44 @@ export const generateAudio = async (text: string, voiceName: string): Promise<st
   } catch (e) {
     console.error("TTS Error", e);
     return null;
+  }
+};
+
+// --- Step 2.5: Music Prompt Generation ---
+
+export const generateMusicPrompt = async (script: string, styleBias: string, intensity: string, isRegeneration: boolean = false): Promise<string> => {
+  const ai = getAI();
+  const prompt = `
+You are an elite music supervisor and AI music prompt engineer (for tools like Suno or Udio).
+Analyze the following script and generate a single-paragraph music generation prompt.
+Do NOT use line breaks or markdown. Just a continuous string of descriptive tags, genres, and phrases.
+
+Style Bias: ${styleBias}
+Intensity: ${intensity}
+
+Script:
+"""
+${script}
+"""
+
+Output ONLY the prompt.
+Example format: "cinematic orchestral, building tension, driving staccato strings, deep brass swells, epic climax, dark, moody, 120bpm"
+  `;
+
+  try {
+    return await callWithRetry(async () => {
+      const response = await ai.models.generateContent({
+        model: getActiveModel(),
+        contents: prompt,
+        config: {
+          temperature: isRegeneration ? 0.9 : 0.7, // Higher temp for regeneration
+        }
+      });
+      return response.text?.trim().replace(/\n/g, ' ') || "";
+    });
+  } catch (e) {
+    console.error("Music Prompt Generation Error", e);
+    throw new Error("Failed to generate music prompt.");
   }
 };
 

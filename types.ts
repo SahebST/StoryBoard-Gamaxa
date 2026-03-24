@@ -64,12 +64,21 @@ export interface AppState {
   scenes: Scene[];
   seoData: SEOData | null;
   
+  // New: Music & Image Config
+  musicPrompt: string;
+  musicStyle: string;
+  musicIntensity: string;
+  aiDirection: string;
+  durationMode: 'auto' | 'custom';
+  customDuration: string;
+  
   // Loading States
   isAnalyzing: boolean;
   isImproving: boolean;
   isGeneratingAudio: boolean;
   isGeneratingSEO: boolean;
   isSegmenting: boolean;
+  isGeneratingMusic: boolean;
 }
 
 export const INITIAL_SETTINGS: ScriptSettings = {

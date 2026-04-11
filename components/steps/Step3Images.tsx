@@ -1,7 +1,9 @@
 
 import React, { useState, useEffect } from 'react';
 import { Scene } from '../../types';
-import { segmentScript, generateSceneImage } from '../../services/geminiService';
+import { segmentScript, generateSceneImage, generateSystemInstruction } from '../../services/geminiService';
+import { Preset, savePresetToFirebase, listUserPresets, deletePresetFromFirebase } from '../../services/presetService';
+import { InstructionModal } from '../InstructionModal';
 
 interface Props {
   script: string;
@@ -18,7 +20,10 @@ interface Props {
   onDurationModeChange: (mode: 'auto' | 'custom') => void;
   customDuration: string;
   onCustomDurationChange: (dur: string) => void;
+  isAdvancedModeGlobal?: boolean;
 }
+
+const GearIcon = () => <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>;
 
 const ASPECT_RATIOS = [
   { 
@@ -222,7 +227,8 @@ const SelectButton: React.FC<{
 
 export const Step3Images: React.FC<Props> = ({ 
   script: initialScript, onScriptChange, scenes, onUpdateScenes, onUpdateSingleScene, onNext,
-  aiDirection, onAiDirectionChange, durationMode, onDurationModeChange, customDuration, onCustomDurationChange
+  aiDirection, onAiDirectionChange, durationMode, onDurationModeChange, customDuration, onCustomDurationChange,
+  isAdvancedModeGlobal
 }) => {
   const [localScript, setLocalScript] = useState(initialScript);
   
@@ -262,6 +268,50 @@ export const Step3Images: React.FC<Props> = ({
   const [isGeneratingPlan, setIsGeneratingPlan] = useState(false);
   const [generatingImageId, setGeneratingImageId] = useState<number | null>(null);
   const [isAutoGenerating, setIsAutoGenerating] = useState(false);
+
+  // Advanced Mode State
+  const [isVisualModalOpen, setIsVisualModalOpen] = useState(false);
+  const [isPresetModalOpen, setIsPresetModalOpen] = useState(false);
+  const [customSystemInstruction, setCustomSystemInstruction] = useState("");
+  const [presets, setPresets] = useState<Preset[]>([]);
+  const [presetName, setPresetName] = useState("");
+  const [isSavingPreset, setIsSavingPreset] = useState(false);
+
+  useEffect(() => {
+    listUserPresets().then(setPresets).catch(console.error);
+  }, []);
+
+  const handleToggleAdvancedMode = () => {
+    const selectedStyle = AESTHETICS.find(s => s.label === activeAesthetic);
+    const promptToUse = activeAesthetic === "Custom" ? `Visual Style: ${customAesthetic}` : (selectedStyle ? selectedStyle.prompt : activeAesthetic);
+    const durationVal = (durationMode === 'custom' && customDuration) ? parseInt(customDuration, 10) : undefined;
+    const defaultInstruction = generateSystemInstruction(promptToUse, activePacing, generationType || 'visual', durationVal);
+    setCustomSystemInstruction(defaultInstruction);
+    setIsVisualModalOpen(true);
+  };
+
+  const handleSavePreset = async () => {
+    if (!presetName.trim() || !customSystemInstruction.trim()) return;
+    setIsSavingPreset(true);
+    try {
+      const newPreset = await savePresetToFirebase(presetName, customSystemInstruction);
+      setPresets([newPreset, ...presets]);
+      setPresetName("");
+    } catch (error) {
+      console.error("Failed to save preset", error);
+    } finally {
+      setIsSavingPreset(false);
+    }
+  };
+
+  const handleDeletePreset = async (id: string) => {
+    try {
+      await deletePresetFromFirebase(id);
+      setPresets(presets.filter(p => p.id !== id));
+    } catch (error) {
+      console.error("Failed to delete preset", error);
+    }
+  };
 
   // --- Handlers ---
 
@@ -329,7 +379,8 @@ export const Step3Images: React.FC<Props> = ({
         activePacing, 
         type, 
         durationVal, 
-        aiDirection
+        aiDirection,
+        isAdvancedModeGlobal ? customSystemInstruction : undefined
       );
       
       onUpdateScenes(newScenes);
@@ -342,11 +393,11 @@ export const Step3Images: React.FC<Props> = ({
       
     } catch (e: any) {
       console.error("Plan generation failed", e);
-      const msg = e.message || e.toString();
-      if (msg.includes("429") || msg.includes("quota") || msg.includes("exhausted") || msg.includes("RESOURCE_EXHAUSTED")) {
+      const msg = e?.message || e?.toString() || "";
+      if (msg && (msg.includes("429") || msg.includes("quota") || msg.includes("exhausted") || msg.includes("RESOURCE_EXHAUSTED"))) {
          alert("Server is busy (Rate Limit Reached). Please wait a minute and try again.");
       } else {
-         alert("Failed to generate plan. " + msg.slice(0, 100));
+         alert("Failed to generate plan. " + (msg ? msg.slice(0, 100) : "Unknown error"));
       }
     } finally {
       setIsGeneratingPlan(false);
@@ -559,9 +610,14 @@ export const Step3Images: React.FC<Props> = ({
             </div>
         </div>
 
-        {/* AI Direction (Row) */}
+        {/* AI Direction & Advanced Control (Row) */}
         <div>
-           <SectionHeader label="06 — AI Direction" />
+           <div className="flex justify-between items-end mb-3">
+             <div className="text-[10px] font-bold tracking-widest text-gray-500 uppercase border-l-2 border-indigo-500 pl-2">
+               06 — AI Direction
+             </div>
+           </div>
+           
            <div className="bg-[#161b22] border border-gray-800 rounded-xl p-4 focus-within:ring-1 focus-within:ring-indigo-500/50 transition-all">
                <textarea
                    value={aiDirection}
@@ -1015,6 +1071,20 @@ export const Step3Images: React.FC<Props> = ({
 
         </div>
       )}
+
+      <InstructionModal
+        isOpen={isVisualModalOpen}
+        onClose={() => setIsVisualModalOpen(false)}
+        title="Visual Plan Generator"
+        instruction={customSystemInstruction}
+        onInstructionChange={setCustomSystemInstruction}
+        defaultInstruction={generateSystemInstruction(
+          AESTHETICS.find(s => s.label === activeAesthetic)?.prompt || activeAesthetic,
+          activePacing,
+          generationType || 'visual',
+          (durationMode === 'custom' && customDuration) ? parseInt(customDuration, 10) : undefined
+        )}
+      />
 
     </div>
   );

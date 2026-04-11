@@ -52,6 +52,8 @@ export interface SEOData {
 export interface AppState {
   currentStep: Step;
   settings: ScriptSettings;
+  sessionTitle: string;
+  sessionId: string | null;
   
   // Script Data
   topic: string;
@@ -84,3 +86,18 @@ export interface AppState {
 export const INITIAL_SETTINGS: ScriptSettings = {
   duration: "60s",
 };
+
+export interface AIModel {
+  id: string;
+  name: string;
+  provider: string;
+  context: number;
+  output: number;
+  type: "chat" | "image" | "audio" | "multimodal";
+  power: "high" | "medium" | "low";
+  speed: "fast" | "balanced" | "slow";
+  cost: "free" | "paid";
+  capabilities: string[];
+  labels: string[];
+  score: number;
+}

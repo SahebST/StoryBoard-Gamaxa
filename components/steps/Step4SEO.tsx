@@ -1,15 +1,21 @@
 
 import React, { useState } from 'react';
 import { SEOData } from '../../types';
+import { DEFAULT_SEO_INSTRUCTION } from '../../services/geminiService';
+import { InstructionModal } from '../InstructionModal';
 
 interface Props {
   seoData: SEOData | null;
   isGenerating: boolean;
-  onRestart: () => void;
+  onRestart: () => boolean;
   hasScript: boolean;
   title?: string;
   script?: string;
+  isAdvancedMode?: boolean;
+  onGenerateSEO?: (customInstruction?: string) => void;
 }
+
+const GearIcon = () => <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>;
 
 const CopyButton: React.FC<{ text: string, label?: string, onClick?: () => void }> = ({ text, label = "Copy", onClick }) => {
   const [copied, setCopied] = useState(false);
@@ -79,23 +85,26 @@ const KeywordChip: React.FC<{ keyword: string }> = ({ keyword }) => {
   );
 };
 
-export const Step4SEO: React.FC<Props> = ({ seoData, isGenerating, onRestart, hasScript, title, script }) => {
+export const Step4SEO: React.FC<Props> = ({ seoData, isGenerating, onRestart, hasScript, title, script, isAdvancedMode, onGenerateSEO }) => {
+  
+  const [customSEOInstruction, setCustomSEOInstruction] = useState(DEFAULT_SEO_INSTRUCTION);
+  const [isSEOModalOpen, setIsSEOModalOpen] = useState(false);
   
   const handleDownload = () => {
     if (!seoData) return;
     const content = `
 TITLES OPTIONS:
-${seoData.titles.map((t, i) => `${i+1}. ${t}`).join('\n')}
+${(seoData.titles || []).map((t, i) => `${i+1}. ${t}`).join('\n')}
 
 DESCRIPTION STACK:
 ${seoData.description}
 
 ${seoData.contextExpansion}
 
-${seoData.hashtags.join('\n')}
+${(seoData.hashtags || []).join('\n')}
 
 KEYWORDS:
-${seoData.keywords.join(', ')}
+${(seoData.keywords || []).join(', ')}
     `.trim();
 
     let baseName = title;
@@ -120,7 +129,7 @@ ${seoData.keywords.join(', ')}
         "",
         seoData.contextExpansion,
         "",
-        seoData.hashtags.join('\n')
+        (seoData.hashtags || []).join('\n')
     ].join('\n');
     navigator.clipboard.writeText(stack);
   };
@@ -167,7 +176,18 @@ ${seoData.keywords.join(', ')}
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-end gap-4 border-b border-gray-800 pb-6">
         <div>
-          <h2 className="text-2xl font-bold text-white mb-1">SEO & Metadata</h2>
+          <div className="flex items-center gap-2">
+            <h2 className="text-2xl font-bold text-white mb-1">SEO & Metadata</h2>
+            {isAdvancedMode && (
+              <button 
+                onClick={() => setIsSEOModalOpen(true)} 
+                className="text-amber-500 hover:text-amber-400 p-1 rounded hover:bg-amber-500/10 transition-colors" 
+                title="Edit AI Instructions"
+              >
+                <GearIcon />
+              </button>
+            )}
+          </div>
           <p className="text-gray-500 text-sm">Optimized for search rankings and click-through rate.</p>
         </div>
         <div className="flex gap-3">
@@ -199,7 +219,7 @@ ${seoData.keywords.join(', ')}
                   Title Strategy (4 Variations)
                </label>
                <div className="space-y-3">
-                  {seoData.titles.map((title, idx) => (
+                  {(seoData.titles || []).map((title, idx) => (
                       <div key={idx} className="flex items-center justify-between gap-4 p-3 rounded-lg bg-[#0d1117] border border-gray-700/50 hover:border-indigo-500/50 transition-colors group">
                           <div className="flex items-center gap-3">
                               <span className="text-xs font-bold text-gray-600 bg-gray-800 px-1.5 py-0.5 rounded group-hover:bg-indigo-900/50 group-hover:text-indigo-300 transition-colors">{idx + 1}</span>
@@ -219,7 +239,7 @@ ${seoData.keywords.join(', ')}
                     </label>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                    {seoData.keywords.map((kw, i) => (
+                    {(seoData.keywords || []).map((kw, i) => (
                         <KeywordChip key={i} keyword={kw} />
                     ))}
                 </div>
@@ -277,7 +297,7 @@ ${seoData.keywords.join(', ')}
                         Viral Tags
                       </span>
                       <div className="flex flex-wrap gap-2 p-3 bg-[#0d1117] rounded-lg border border-gray-800/50">
-                        {seoData.hashtags.map(tag => (
+                        {(seoData.hashtags || []).map(tag => (
                             <span key={tag} className="text-pink-300/80 text-xs font-mono">
                                 {tag}
                             </span>
@@ -288,10 +308,20 @@ ${seoData.keywords.join(', ')}
 
                 </div>
             </div>
-
+            
         </div>
 
       </div>
+
+      <InstructionModal
+        isOpen={isSEOModalOpen}
+        onClose={() => setIsSEOModalOpen(false)}
+        title="SEO & Metadata Generator"
+        instruction={customSEOInstruction}
+        onInstructionChange={setCustomSEOInstruction}
+        defaultInstruction={DEFAULT_SEO_INSTRUCTION}
+      />
+
     </div>
   );
 };

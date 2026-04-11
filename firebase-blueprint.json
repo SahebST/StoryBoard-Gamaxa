@@ -1,0 +1,73 @@
+{
+  "entities": {
+    "Session": {
+      "title": "Session",
+      "description": "A saved project or season in the app.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "The user ID of the owner."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When the session was created."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When the session was last updated."
+        },
+        "name": {
+          "type": "string",
+          "description": "The name of the session."
+        },
+        "appState": {
+          "type": "string",
+          "description": "The serialized AppState."
+        }
+      },
+      "required": ["uid", "createdAt", "updatedAt", "name", "appState"]
+    },
+    "Preset": {
+      "title": "Preset",
+      "description": "A saved AI instruction preset.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "The user ID of the owner."
+        },
+        "name": {
+          "type": "string",
+          "description": "The name of the preset."
+        },
+        "instructions": {
+          "type": "string",
+          "description": "The custom AI instructions."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When the preset was created."
+        }
+      },
+      "required": ["uid", "name", "instructions", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/sessions/{sessionId}": {
+      "schema": {
+        "$ref": "#/entities/Session"
+      },
+      "description": "Stores user sessions/projects."
+    },
+    "/presets/{presetId}": {
+      "schema": {
+        "$ref": "#/entities/Preset"
+      },
+      "description": "Stores user AI instruction presets."
+    }
+  }
+}

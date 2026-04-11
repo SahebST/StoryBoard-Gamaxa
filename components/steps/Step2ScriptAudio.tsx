@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { VOICES } from '../../constants';
-import { base64PCMToWavBlob, generateMusicPrompt } from '../../services/geminiService';
+import { base64PCMToWavBlob, DEFAULT_MUSIC_INSTRUCTION } from '../../services/geminiService';
 import { ScriptSettings } from '../../types';
+import { InstructionModal } from '../InstructionModal';
 
 interface Props {
   script: string;
@@ -25,14 +26,17 @@ interface Props {
   musicIntensity: string;
   onMusicIntensityChange: (intensity: string) => void;
   isGeneratingMusic: boolean;
-  onGenerateMusicPrompt: (isRegeneration: boolean) => void;
+  onGenerateMusicPrompt: (isRegeneration: boolean, customInstruction?: string) => void;
+  isAdvancedMode?: boolean;
 }
+
+const GearIcon = () => <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>;
 
 export const Step2ScriptAudio: React.FC<Props> = ({ 
   script, durationStr, settings, onScriptChange, onRegenerateScript, 
   onGenerateAudio, audioBase64, isGeneratingAudio, onNext, isSegmenting,
   selectedVoiceName, title,
-  musicPrompt, onMusicPromptChange, musicStyle, onMusicStyleChange, musicIntensity, onMusicIntensityChange, isGeneratingMusic, onGenerateMusicPrompt
+  musicPrompt, onMusicPromptChange, musicStyle, onMusicStyleChange, musicIntensity, onMusicIntensityChange, isGeneratingMusic, onGenerateMusicPrompt, isAdvancedMode
 }) => {
   const [selectedVoice, setSelectedVoice] = useState(VOICES[0]);
   const [isVoiceDropdownOpen, setIsVoiceDropdownOpen] = useState(false);
@@ -41,6 +45,9 @@ export const Step2ScriptAudio: React.FC<Props> = ({
   const audioRef = useRef<HTMLAudioElement>(null);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
+
+  const [customMusicInstruction, setCustomMusicInstruction] = useState(DEFAULT_MUSIC_INSTRUCTION);
+  const [isMusicModalOpen, setIsMusicModalOpen] = useState(false);
 
   // Sync selected voice if provided by Auto Mode
   useEffect(() => {
@@ -331,6 +338,15 @@ export const Step2ScriptAudio: React.FC<Props> = ({
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-bold text-white flex items-center gap-2">
             🎵 Music Prompt
+            {isAdvancedMode && (
+              <button 
+                onClick={() => setIsMusicModalOpen(true)} 
+                className="text-amber-500 hover:text-amber-400 p-1 rounded hover:bg-amber-500/10 transition-colors" 
+                title="Edit AI Instructions"
+              >
+                <GearIcon />
+              </button>
+            )}
           </h3>
           <div className="flex items-center gap-3">
              <select 
@@ -365,7 +381,7 @@ export const Step2ScriptAudio: React.FC<Props> = ({
 
         <div className="flex flex-wrap items-center gap-2">
           <button
-            onClick={() => onGenerateMusicPrompt(false)}
+            onClick={() => onGenerateMusicPrompt(false, isAdvancedMode ? customMusicInstruction : undefined)}
             disabled={isGeneratingMusic || !script.trim()}
             className="px-4 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-500 rounded-md transition-colors disabled:opacity-50 flex items-center gap-2"
           >
@@ -380,7 +396,7 @@ export const Step2ScriptAudio: React.FC<Props> = ({
           {musicPrompt && (
             <>
               <button
-                onClick={() => onGenerateMusicPrompt(true)}
+                onClick={() => onGenerateMusicPrompt(true, isAdvancedMode ? customMusicInstruction : undefined)}
                 disabled={isGeneratingMusic}
                 className="px-4 py-2 text-xs font-bold text-gray-300 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-md transition-colors disabled:opacity-50"
               >
@@ -413,6 +429,15 @@ export const Step2ScriptAudio: React.FC<Props> = ({
           {isSegmenting ? "Processing..." : "Next: Visuals →"}
         </button>
       </div>
+
+      <InstructionModal
+        isOpen={isMusicModalOpen}
+        onClose={() => setIsMusicModalOpen(false)}
+        title="Music Prompt Generator"
+        instruction={customMusicInstruction}
+        onInstructionChange={setCustomMusicInstruction}
+        defaultInstruction={DEFAULT_MUSIC_INSTRUCTION}
+      />
 
     </div>
   );

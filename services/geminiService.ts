@@ -1,20 +1,182 @@
 
-import { GoogleGenAI, Modality, Type, Schema } from "@google/genai";
 import { jsonrepair } from "jsonrepair";
-import { ScriptSettings, Scene, SEOData, ScriptAnalysis } from "../types";
+import { GoogleGenAI, Type } from "@google/genai";
+import { ScriptSettings, Scene, SEOData, ScriptAnalysis, AIModel } from "../types";
 
-// Helper to get AI instance
-const getAI = () => new GoogleGenAI({ apiKey: process.env.API_KEY });
+// --- Gemini SDK Initialization ---
+// The platform injects GEMINI_API_KEY into the environment.
+// Per skill guidelines, we MUST call Gemini from the frontend.
+
+let genAIInstance: GoogleGenAI | null = null;
+
+const getApiKey = () => {
+  return process.env.GEMINI_API_KEY || 
+         process.env.GOOGLE_API_KEY || 
+         process.env.GOOGLE_GENERATIVE_AI_API_KEY ||
+         (import.meta as any).env?.VITE_GEMINI_API_KEY ||
+         '';
+};
+
+const getGenAI = () => {
+  const apiKey = getApiKey();
+  if (!genAIInstance && apiKey) {
+    // If we have a key, we pass it. If not, we let the SDK try to find it.
+    genAIInstance = new GoogleGenAI({ apiKey });
+  } else if (!genAIInstance) {
+    // Try default initialization as per quickstart
+    genAIInstance = new GoogleGenAI({});
+  }
+  return genAIInstance;
+};
 
 // --- Model Configuration ---
-let activeModel = 'gemini-2.0-flash';
+const FALLBACK_GOOGLE_MODELS: AIModel[] = [
+  {
+    id: 'gemini-3-flash-preview',
+    name: 'Gemini 3 Flash (Latest)',
+    provider: 'google',
+    context: 1000000,
+    output: 8192,
+    type: 'chat',
+    power: 'medium',
+    speed: 'fast',
+    cost: 'free',
+    capabilities: ['chat', 'vision', 'tools'],
+    labels: ['fast', 'balanced', 'best for real-time'],
+    score: 95
+  },
+  {
+    id: 'gemini-3.1-pro-preview',
+    name: 'Gemini 3.1 Pro (Latest)',
+    provider: 'google',
+    context: 2000000,
+    output: 8192,
+    type: 'chat',
+    power: 'high',
+    speed: 'balanced',
+    cost: 'free',
+    capabilities: ['chat', 'vision', 'tools', 'reasoning', 'long-context'],
+    labels: ['reasoning', 'complex', 'ultra-context'],
+    score: 98
+  },
+  {
+    id: 'gemini-3.1-flash-lite-preview',
+    name: 'Gemini 3.1 Flash Lite',
+    provider: 'google',
+    context: 1000000,
+    output: 8192,
+    type: 'chat',
+    power: 'low',
+    speed: 'fast',
+    cost: 'free',
+    capabilities: ['chat', 'vision'],
+    labels: ['fast', 'lightweight'],
+    score: 85
+  },
+  {
+    id: 'gemini-2.5-flash-image',
+    name: 'Gemini 2.5 Flash Image',
+    provider: 'google',
+    context: 32768,
+    output: 0,
+    type: 'image',
+    power: 'medium',
+    speed: 'fast',
+    cost: 'free',
+    capabilities: ['vision'],
+    labels: ['image-gen'],
+    score: 90
+  }
+];
 
-export const setActiveModel = (model: string) => {
-  console.log(`Switched AI Model to: ${model}`);
+let activeModel = 'gemini-3-flash-preview';
+let activeProvider = 'google';
+
+export const setActiveModel = (model: string, provider: string = 'google') => {
+  console.log(`Switched AI Model to: ${model} (${provider})`);
   activeModel = model;
+  activeProvider = provider;
 };
 
 export const getActiveModel = () => activeModel;
+export const getActiveProvider = () => activeProvider;
+
+export const fetchModels = async (provider: string): Promise<AIModel[]> => {
+  if (provider === 'google') {
+    try {
+      const key = getApiKey();
+      if (!key) {
+        console.warn("No Google API key found in environment, using fallback models.");
+        return FALLBACK_GOOGLE_MODELS;
+      }
+
+      // Fetch models directly from Google on the frontend
+      // We use the v1beta endpoint and the x-goog-api-key header for better compatibility
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models`, {
+        headers: {
+          'x-goog-api-key': key,
+          'Content-Type': 'application/json'
+        }
+      });
+      const data = await response.json();
+      
+      if (data.error) {
+        console.warn("Google API error during model fetch:", data.error.message);
+        // If it's an invalid argument, it might be the endpoint version. 
+        // But we'll fall back to ensure the app works.
+        return FALLBACK_GOOGLE_MODELS;
+      }
+
+      // Normalize Google models on the frontend
+      const fetchedModels = (data.models || [])
+        .filter((m: any) => {
+          const methods = m.supportedGenerationMethods || m.supported_generation_methods || [];
+          return methods.includes('generateContent');
+        })
+        .map((m: any) => {
+          const id = m.name.split('/').pop();
+          const isPro = id.includes('pro');
+          const isFlash = id.includes('flash');
+          const isImage = id.includes('image');
+          
+          const methods = m.supportedGenerationMethods || m.supported_generation_methods || [];
+          const inputLimit = m.inputTokenLimit || m.input_token_limit || 32768;
+          const outputLimit = m.outputTokenLimit || m.output_token_limit || 8192;
+
+          const capabilities = [];
+          if (methods.includes('generateContent')) capabilities.push('chat');
+          if (id.includes('vision') || isImage) capabilities.push('vision');
+          if (inputLimit > 100000) capabilities.push('long-context');
+          
+          return {
+            id,
+            name: m.displayName || m.display_name || id,
+            provider: 'google',
+            context: inputLimit,
+            output: outputLimit,
+            type: isImage ? 'image' : 'chat',
+            power: isPro ? 'high' : (isFlash ? 'medium' : 'low'),
+            speed: isFlash ? 'fast' : 'balanced',
+            cost: 'free',
+            capabilities,
+            labels: isPro ? ['reasoning', 'complex'] : ['fast', 'balanced'],
+            score: isPro ? 90 : 80
+          };
+        });
+
+      return fetchedModels.length > 0 ? fetchedModels : FALLBACK_GOOGLE_MODELS;
+    } catch (err: any) {
+      console.error("Error fetching Google models on frontend, using fallbacks:", err);
+      return FALLBACK_GOOGLE_MODELS;
+    }
+  }
+
+  // For other providers, use the backend proxy
+  const response = await fetch(`/api/models?provider=${provider}`);
+  const data = await response.json();
+  if (!data.success) throw new Error(data.error || 'Failed to fetch models');
+  return data.models;
+};
 
 // --- Utils ---
 
@@ -49,6 +211,57 @@ async function callWithRetry<T>(fn: () => Promise<T>, retries = 3, baseDelay = 3
   throw new Error("Max retries exceeded");
 }
 
+async function fetchAIResponse(prompt: string, systemInstruction?: string, responseFormat?: 'json') {
+  if (activeProvider === 'google') {
+    // Use SDK for Google models on the frontend
+    const ai = getGenAI();
+    if (!ai) throw new Error("Google AI SDK not initialized. Check GEMINI_API_KEY.");
+
+    // Align with the new GenAI SDK (v1.0.0+) patterns
+    const options: any = {
+      model: activeModel,
+      contents: [{ parts: [{ text: prompt }] }], // Standard format
+    };
+
+    // The SDK uses camelCase for the config object
+    const config: any = {};
+    
+    if (systemInstruction) {
+      config.systemInstruction = { parts: [{ text: systemInstruction }] };
+    }
+
+    if (responseFormat === 'json') {
+      config.responseMimeType = 'application/json';
+    }
+
+    // Merge config into options if not empty
+    if (Object.keys(config).length > 0) {
+      options.config = config;
+    }
+
+    const response = await ai.models.generateContent(options);
+    return response.text;
+  }
+
+  // Use backend for other providers
+  const fullPrompt = systemInstruction ? `${systemInstruction}\n\n${prompt}` : prompt;
+  
+  const response = await fetch('/api/ai', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ 
+      provider: activeProvider, 
+      model: activeModel, 
+      prompt: fullPrompt,
+      responseFormat 
+    })
+  });
+  
+  const data = await response.json();
+  if (!data.success) throw new Error(data.error || 'Unknown error');
+  return data.output;
+}
+
 function cleanJSON(text: string): string {
   // Remove markdown code blocks if present
   let clean = text.trim();
@@ -71,20 +284,80 @@ export const downloadFile = (blob: Blob, filename: string) => {
   URL.revokeObjectURL(url);
 };
 
+// --- Default System Instructions ---
+
+export const DEFAULT_SCRIPT_INSTRUCTION = `
+You are an expert Short-Form Content Strategist and Scriptwriter. 
+Your goal is to create high-retention, viral-ready scripts for TikTok, Reels, and YouTube Shorts.
+
+CORE PRINCIPLES:
+- HOOK FIRST: The first 3 seconds must grab attention immediately.
+- VALUE DENSITY: Every sentence must provide value, entertainment, or curiosity.
+- PACING: Use punchy, rhythmic sentences. Avoid long, complex clauses.
+- NARRATIVE: Use a compelling 3rd person narrative style unless specified otherwise.
+`.trim();
+
+export const DEFAULT_ANALYZE_INSTRUCTION = `
+You are a Senior Script Analyst and Fact-Checker for a major media production house.
+Your analysis must be objective, critical, and actionable.
+
+SCORING CRITERIA:
+- Hook (0-30): Does it stop the scroll?
+- Retention (0-40): Is the pacing consistent? Are there "lulls"?
+- Clarity (0-30): Is the message easy to understand?
+`.trim();
+
+export const DEFAULT_IMPROVE_INSTRUCTION = `
+You are a Script Doctor. Your job is to take an existing script and surgically improve it based on specific feedback while preserving its core message and tone.
+`.trim();
+
+export const DEFAULT_HOOK_INSTRUCTION = `
+You are a Viral Marketing Expert specializing in "Scroll-Stopping" hooks. 
+You understand psychological triggers like curiosity gaps, loss aversion, and authority.
+`.trim();
+
+export const DEFAULT_MUSIC_INSTRUCTION = `
+You are an expert music prompt engineer for Suno AI.
+
+Your job is to read the script and automatically determine the best background music style.
+
+Analyze internally:
+- emotion and tone
+- pacing and energy
+- tension and intensity
+- content type
+
+Then convert it into ONE Suno-ready instrumental prompt.
+
+STRICT RULES:
+- Output ONLY one prompt (no explanation)
+- MUST be under 500 characters total (hard limit)
+- If longer, rewrite until under 500
+- Instrumental only (no vocals, no lyrics)
+- Do NOT describe the story
+- Use only music/production language
+
+The prompt MUST include:
+- genre (single clear style)
+- mood
+- energy flow
+- tempo + rhythm type
+- instruments (low, mid, high)
+- production texture
+- 1–2 constraints (e.g., no distortion, no genre shifts)
+
+Keep it dense, precise, and production-level.
+`.trim();
+
+export const DEFAULT_SEO_INSTRUCTION = `
+You are an elite YouTube and TikTok Algorithm Specialist. 
+Your expertise is in Click-Through Rate (CTR) optimization, Search Engine Optimization (SEO), and viewer psychology.
+`.trim();
+
 // --- Step 1: Script Creation, Analysis & Improvement ---
 
-export const generateScriptFromIdea = async (topic: string, tone: string): Promise<string> => {
-  const ai = getAI();
-  const systemInstruction = `
-  You are an expert Short-Form Content Strategist and Scriptwriter. 
-  Your goal is to create high-retention, viral-ready scripts for TikTok, Reels, and YouTube Shorts.
-  
-  CORE PRINCIPLES:
-  - HOOK FIRST: The first 3 seconds must grab attention immediately.
-  - VALUE DENSITY: Every sentence must provide value, entertainment, or curiosity.
-  - PACING: Use punchy, rhythmic sentences. Avoid long, complex clauses.
-  - NARRATIVE: Use a compelling 3rd person narrative style unless specified otherwise.
-  `;
+export const generateScriptFromIdea = async (topic: string, tone: string, customInstruction?: string): Promise<string> => {
+  const systemInstruction = customInstruction?.trim() || DEFAULT_SCRIPT_INSTRUCTION;
 
   const prompt = `
   TASK: Write a compelling short-form video script based on the topic below.
@@ -103,29 +376,13 @@ export const generateScriptFromIdea = async (topic: string, tone: string): Promi
   `;
 
   return callWithRetry(async () => {
-    const response = await ai.models.generateContent({
-      model: activeModel,
-      contents: prompt,
-      config: {
-        systemInstruction: systemInstruction,
-        temperature: 0.7, // Balanced creativity and focus
-      }
-    });
-    return response.text?.trim() || "";
+    const output = await fetchAIResponse(prompt, systemInstruction);
+    return output?.trim() || "";
   });
 };
 
-export const analyzeScript = async (script: string): Promise<ScriptAnalysis> => {
-  const ai = getAI();
-  const systemInstruction = `
-  You are a Senior Script Analyst and Fact-Checker for a major media production house.
-  Your analysis must be objective, critical, and actionable.
-  
-  SCORING CRITERIA:
-  - Hook (0-30): Does it stop the scroll?
-  - Retention (0-40): Is the pacing consistent? Are there "lulls"?
-  - Clarity (0-30): Is the message easy to understand?
-  `;
+export const analyzeScript = async (script: string, customInstruction?: string): Promise<ScriptAnalysis> => {
+  const systemInstruction = customInstruction?.trim() || DEFAULT_ANALYZE_INSTRUCTION;
 
   const prompt = `
   TASK: Perform a deep-dive analysis of this short-form script.
@@ -139,37 +396,25 @@ export const analyzeScript = async (script: string): Promise<ScriptAnalysis> => 
   3. FACT CHECK: Identify any potential inaccuracies. Be specific. If perfect, return ["Verified. No factual errors found."].
   4. STRENGTHS/WEAKNESSES: Provide 2 distinct points for each.
   5. IMPROVEMENT: Suggest one specific structural or word-choice change.
+  
+  IMPORTANT: Return ONLY valid JSON matching this schema:
+  {
+    "score": number,
+    "hookRating": "Weak" | "Good" | "Viral",
+    "pacing": "Too Slow" | "Good" | "Too Fast",
+    "wordCount": number,
+    "estimatedDuration": string,
+    "factCheck": string[],
+    "strengths": string[],
+    "weaknesses": string[],
+    "improvementSuggestion": string
+  }
   `;
 
   return callWithRetry(async () => {
-    const response = await ai.models.generateContent({
-      model: activeModel,
-      contents: prompt,
-      config: {
-        systemInstruction: systemInstruction,
-        maxOutputTokens: 8192,
-        responseMimeType: 'application/json',
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            score: { type: Type.NUMBER },
-            hookRating: { type: Type.STRING, enum: ["Weak", "Good", "Viral"] },
-            pacing: { type: Type.STRING, enum: ["Too Slow", "Good", "Too Fast"] },
-            wordCount: { type: Type.NUMBER },
-            estimatedDuration: { type: Type.STRING },
-            factCheck: { type: Type.ARRAY, items: { type: Type.STRING } },
-            strengths: { type: Type.ARRAY, items: { type: Type.STRING } },
-            weaknesses: { type: Type.ARRAY, items: { type: Type.STRING } },
-            improvementSuggestion: { type: Type.STRING }
-          },
-          required: ['score', 'hookRating', 'factCheck', 'strengths', 'weaknesses']
-        }
-      }
-    });
-
-    const text = response.text || "{}";
+    const text = await fetchAIResponse(prompt, systemInstruction, 'json');
     try {
-      return JSON.parse(jsonrepair(text));
+      return JSON.parse(jsonrepair(cleanJSON(text || "{}")));
     } catch (e) {
       console.error("Failed to parse analysis JSON", e);
       throw new Error("Analysis failed");
@@ -177,11 +422,8 @@ export const analyzeScript = async (script: string): Promise<ScriptAnalysis> => 
   });
 };
 
-export const improveScript = async (script: string, instruction: string): Promise<string> => {
-  const ai = getAI();
-  const systemInstruction = `
-  You are a Script Doctor. Your job is to take an existing script and surgically improve it based on specific feedback while preserving its core message and tone.
-  `;
+export const improveScript = async (script: string, instruction: string, customInstruction?: string): Promise<string> => {
+  const systemInstruction = customInstruction?.trim() || DEFAULT_IMPROVE_INSTRUCTION;
 
   const prompt = `
   TASK: Rewrite this script to address the following instruction.
@@ -199,24 +441,13 @@ export const improveScript = async (script: string, instruction: string): Promis
   `;
 
   return callWithRetry(async () => {
-    const response = await ai.models.generateContent({
-      model: activeModel,
-      contents: prompt,
-      config: {
-        systemInstruction: systemInstruction,
-        temperature: 0.6,
-      }
-    });
-    return response.text?.trim() || script;
+    const output = await fetchAIResponse(prompt, systemInstruction);
+    return output?.trim() || script;
   });
 };
 
-export const generateViralHooks = async (topic: string): Promise<string[]> => {
-  const ai = getAI();
-  const systemInstruction = `
-  You are a Viral Marketing Expert specializing in "Scroll-Stopping" hooks. 
-  You understand psychological triggers like curiosity gaps, loss aversion, and authority.
-  `;
+export const generateViralHooks = async (topic: string, customInstruction?: string): Promise<string[]> => {
+  const systemInstruction = customInstruction?.trim() || DEFAULT_HOOK_INSTRUCTION;
 
   const prompt = `
   TASK: Write 5 distinct, high-CTR hooks for a video about: "${topic}".
@@ -234,43 +465,53 @@ export const generateViralHooks = async (topic: string): Promise<string[]> => {
   `;
 
   return callWithRetry(async () => {
-      const response = await ai.models.generateContent({
-        model: activeModel,
-        contents: prompt,
-        config: {
-          systemInstruction: systemInstruction,
-          temperature: 0.8,
-        }
-      });
-      const text = response.text || "";
+      const text = await fetchAIResponse(prompt, systemInstruction);
       // Clean up the output (remove bullets, numbers)
-      return text.split('\n')
-        .map(line => line.trim())
-        .filter(line => line.length > 0)
-        .map(line => line.replace(/^[\d\-\*\•]+\.?\s*/, ''));
+      return (text || "").split('\n')
+        .map((line: string) => line.trim())
+        .filter((line: string) => line.length > 0)
+        .map((line: string) => line.replace(/^[\d\-\*\•]+\.?\s*/, ''));
   });
 };
 
 // --- Step 2: Audio Generation ---
 
 export const generateAudio = async (text: string, voiceName: string): Promise<string | null> => {
-  const ai = getAI();
-  
   try {
-    return await callWithRetry(async () => {
+    if (activeProvider === 'google') {
+      const ai = getGenAI();
+      if (!ai) throw new Error("Google AI SDK not initialized.");
+
       const response = await ai.models.generateContent({
-        model: "gemini-2.5-flash-preview-tts",
-        contents: [{ parts: [{ text: text }] }],
+        model: 'gemini-2.5-flash-preview-tts',
+        contents: [{ parts: [{ text }] }],
         config: {
-          responseModalities: [Modality.AUDIO],
+          responseModalities: ['AUDIO' as any],
           speechConfig: {
             voiceConfig: {
-              prebuiltVoiceConfig: { voiceName: voiceName },
-            },
-          },
-        },
+              prebuiltVoiceConfig: { voiceName: voiceName || 'Kore' }
+            }
+          }
+        }
       });
       return response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data || null;
+    }
+
+    return await callWithRetry(async () => {
+      const response = await fetch('/api/ai', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          provider: 'google', 
+          model: 'gemini-2.5-flash-preview-tts', 
+          prompt: text,
+          task_type: 'audio'
+        })
+      });
+      
+      const data = await response.json();
+      if (!data.success) throw new Error(data.error || 'Unknown error');
+      return data.output;
     });
   } catch (e) {
     console.error("TTS Error", e);
@@ -280,35 +521,19 @@ export const generateAudio = async (text: string, voiceName: string): Promise<st
 
 // --- Step 2.5: Music Prompt Generation ---
 
-export const generateMusicPrompt = async (script: string, styleBias: string, intensity: string, isRegeneration: boolean = false): Promise<string> => {
-  const ai = getAI();
-  const prompt = `
-You are an elite music supervisor and AI music prompt engineer (for tools like Suno or Udio).
-Analyze the following script and generate a single-paragraph music generation prompt.
-Do NOT use line breaks or markdown. Just a continuous string of descriptive tags, genres, and phrases.
-
-Style Bias: ${styleBias}
+export const generateMusicPrompt = async (script: string, styleBias: string, intensity: string, isRegeneration: boolean = false, customInstruction?: string): Promise<string> => {
+  const systemInstruction = customInstruction?.trim() || DEFAULT_MUSIC_INSTRUCTION;
+  
+  const prompt = `Style Bias: ${styleBias}
 Intensity: ${intensity}
 
 Script:
-"""
-${script}
-"""
-
-Output ONLY the prompt.
-Example format: "cinematic orchestral, building tension, driving staccato strings, deep brass swells, epic climax, dark, moody, 120bpm"
-  `;
+${script}`;
 
   try {
     return await callWithRetry(async () => {
-      const response = await ai.models.generateContent({
-        model: getActiveModel(),
-        contents: prompt,
-        config: {
-          temperature: isRegeneration ? 0.9 : 0.7, // Higher temp for regeneration
-        }
-      });
-      return response.text?.trim().replace(/\n/g, ' ') || "";
+      const output = await fetchAIResponse(prompt, systemInstruction);
+      return output?.trim().replace(/\n/g, ' ') || "";
     });
   } catch (e) {
     console.error("Music Prompt Generation Error", e);
@@ -316,18 +541,12 @@ Example format: "cinematic orchestral, building tension, driving staccato string
   }
 };
 
-// --- Step 3: Script Segmentation & Plan Generation ---
-
-export const segmentScript = async (
-  script: string, 
+export const generateSystemInstruction = (
   visualStylePrompt: string, 
   pacing: string,
   mode: 'visual' | 't2v' = 'visual',
-  totalDuration?: number,
-  userInstruction: string = ""
-): Promise<Scene[]> => {
-  const ai = getAI();
-  
+  totalDuration?: number
+): string => {
   // 1. Handle Duration Overrides
   let durationContext = "";
   if (totalDuration) {
@@ -395,7 +614,7 @@ export const segmentScript = async (
   }
 
   // Use the advanced "Educational Visual Architect" system instruction
-  const systemInstruction = `
+  return `
 You are an elite Visual Content Director and Storyboard Artist. Your goal is to translate a script into a world-class visual production plan optimized for high-retention social media content.
 
 VISUAL DIRECTIVES:
@@ -437,64 +656,61 @@ STAGES OF PRODUCTION:
 2. **Temporal Allocation**: Assign precise durations following the PACING RULES to ensure the video hits the target length.
 3. **Prompt Synthesis**: Generate high-fidelity prompts using the structures provided below.
 ${promptEngineeringSection}
-  `;
+  `.trim();
+};
 
-  // Append user instruction if provided
-  const finalSystemInstruction = userInstruction && userInstruction.trim() 
+// --- Step 3: Script Segmentation & Plan Generation ---
+
+export const segmentScript = async (
+  script: string, 
+  visualStylePrompt: string, 
+  pacing: string,
+  mode: 'visual' | 't2v' = 'visual',
+  totalDuration?: number,
+  userInstruction: string = "",
+  customSystemInstruction?: string
+): Promise<Scene[]> => {
+  let systemInstruction = customSystemInstruction;
+  if (!systemInstruction) {
+    systemInstruction = generateSystemInstruction(visualStylePrompt, pacing, mode, totalDuration);
+  }
+
+  // Append user instruction if provided and we are not fully overriding
+  const finalSystemInstruction = (!customSystemInstruction && userInstruction && userInstruction.trim())
   ? `${systemInstruction}\n\n--- ADDITIONAL USER DIRECTION ---\nThe user has provided specific instructions to guide your generation:\n"${userInstruction}"\n\nEnsure you adhere to these instructions alongside the core protocol.`
   : systemInstruction;
 
-
-  // Define Schema with strict strict layout and classification types
-  const schema = {
-    type: Type.OBJECT,
-    properties: {
-      visual_segments: {
-        type: Type.ARRAY,
-        items: {
-          type: Type.OBJECT,
-          properties: {
-            id: { type: Type.INTEGER },
-            script_segment: { type: Type.STRING },
-            core_concept: { type: Type.STRING },
-            duration: { 
-                type: Type.NUMBER, 
-                description: totalDuration 
-                    ? `Duration in seconds. The sum of all segments MUST be exactly ${totalDuration}.` 
-                    : "Strictly follow pacing rules. Adaptive: 1-5s. Fixed: Requested Fixed Time." 
-            },
-            classification: { type: Type.STRING, enum: ["Structure", "Process", "Comparison", "Abstract"] },
-            visual_hierarchy: { type: Type.STRING },
-            layout: { type: Type.STRING },
-            final_image_prompt: { type: Type.STRING },
-            image_to_video_prompt: { type: Type.STRING },
-            text_to_video_prompt: { type: Type.STRING }
-          },
-          // IMPORTANT: Require prompts to ensure they are generated
-          required: ["id", "script_segment", "core_concept", "duration", "final_image_prompt", "image_to_video_prompt", "text_to_video_prompt"]
-        }
+  const prompt = `
+  SCRIPT:
+  "${script}"
+  
+  IMPORTANT: Return ONLY valid JSON matching this schema:
+  {
+    "visual_segments": [
+      {
+        "id": number,
+        "script_segment": string,
+        "core_concept": string,
+        "duration": number,
+        "classification": "Structure" | "Process" | "Comparison" | "Abstract",
+        "visual_hierarchy": string,
+        "layout": string,
+        "final_image_prompt": string,
+        "image_to_video_prompt": string,
+        "text_to_video_prompt": string
       }
-    }
-  };
+    ]
+  }
+  `;
 
   return callWithRetry(async () => {
-    const response = await ai.models.generateContent({
-      model: activeModel,
-      contents: script,
-      config: {
-        systemInstruction: finalSystemInstruction,
-        maxOutputTokens: 16384,
-        responseMimeType: 'application/json',
-        responseSchema: schema,
-      }
-    });
+    const text = await fetchAIResponse(prompt, finalSystemInstruction, 'json');
 
-    const text = cleanJSON(response.text || "{}");
     let data;
     try {
-        data = JSON.parse(jsonrepair(text));
+        data = JSON.parse(jsonrepair(cleanJSON(text || "{}")));
     } catch(e: any) {
-        console.error("Failed to parse segment JSON", e, "Raw text sample:", text.slice(-100));
+        console.error("Failed to parse segment JSON", e, "Raw text sample:", text?.slice(-100));
         throw new Error(`Segmentation failed: ${e.message || "Invalid JSON structure"}`);
     }
 
@@ -520,41 +736,54 @@ ${promptEngineeringSection}
 // --- Image Generation ---
 
 export const generateSceneImage = async (prompt: string, aspectRatio: string): Promise<string | null> => {
-    const ai = getAI();
-    return callWithRetry(async () => {
+    if (activeProvider === 'google') {
+      try {
+        const ai = getGenAI();
+        if (!ai) throw new Error("Google AI SDK not initialized.");
+
         const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash-image',
-            contents: {
-                parts: [{ text: prompt }]
-            },
-            config: {
-                imageConfig: {
-                    aspectRatio: aspectRatio as any
-                }
+          model: 'gemini-2.5-flash-image',
+          contents: { parts: [{ text: prompt }] },
+          config: {
+            imageConfig: {
+              aspectRatio: aspectRatio as any || '1:1'
             }
+          }
         });
         
-        if (response.candidates?.[0]?.content?.parts) {
-            for (const part of response.candidates[0].content.parts) {
-                if (part.inlineData && part.inlineData.mimeType.startsWith('image')) {
-                     return `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
-                }
-            }
+        for (const part of response.candidates?.[0]?.content?.parts || []) {
+          if (part.inlineData) return part.inlineData.data;
         }
         return null;
+      } catch (err) {
+        console.error("Image Gen Error on Frontend:", err);
+        throw err;
+      }
+    }
+
+    return callWithRetry(async () => {
+        const response = await fetch('/api/ai', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            provider: 'google', 
+            model: 'gemini-2.5-flash-image', 
+            prompt: prompt,
+            task_type: 'image'
+          })
+        });
+        
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || 'Unknown error');
+        return data.output;
     });
 };
 
 // --- SEO Generation ---
 
-export const generateSEO = async (script: string, audience: string, tone: string): Promise<SEOData> => {
-    const ai = getAI();
-    
+export const generateSEO = async (script: string, audience: string, tone: string, customInstruction?: string): Promise<SEOData> => {
     // Expert Persona Prompt
-    const systemInstruction = `
-    You are an elite YouTube and TikTok Algorithm Specialist. 
-    Your expertise is in Click-Through Rate (CTR) optimization, Search Engine Optimization (SEO), and viewer psychology.
-    `;
+    const systemInstruction = customInstruction?.trim() || DEFAULT_SEO_INSTRUCTION;
 
     const prompt = `
     TASK: Maximize the reach of this video script through optimized metadata.
@@ -575,45 +804,23 @@ export const generateSEO = async (script: string, audience: string, tone: string
     3. CONTEXT EXPANSION: Identify 2-3 complex topics from the script and explain them in detail (2-3 paragraphs each) to provide extra value and boost SEO ranking.
     4. HASHTAGS: 10-15 relevant tags.
     5. KEYWORDS: 15-20 LSI keywords.
+    
+    IMPORTANT: Return ONLY valid JSON matching this schema:
+    {
+      "titles": string[],
+      "description": string,
+      "contextExpansion": string,
+      "hashtags": string[],
+      "keywords": string[]
+    }
     `;
  
     return callWithRetry(async () => {
-        const response = await ai.models.generateContent({
-            model: activeModel,
-            contents: prompt,
-            config: {
-                systemInstruction: systemInstruction,
-                maxOutputTokens: 8192,
-                responseMimeType: 'application/json',
-                responseSchema: {
-                    type: Type.OBJECT,
-                    properties: {
-                        titles: { 
-                            type: Type.ARRAY, 
-                            items: { type: Type.STRING },
-                            description: "4 distinct title variations: Viral, SEO, Emotional, Short."
-                        },
-                        description: { 
-                            type: Type.STRING,
-                            description: "Compelling video description with hook and summary." 
-                        },
-                        contextExpansion: {
-                            type: Type.STRING,
-                            description: "Detailed explanation of points the script missed or skimmed over."
-                        },
-                        hashtags: { type: Type.ARRAY, items: { type: Type.STRING } },
-                        keywords: { type: Type.ARRAY, items: { type: Type.STRING } }
-                    },
-                    required: ['titles', 'description', 'contextExpansion', 'hashtags', 'keywords']
-                }
-            }
-        });
-        
-        const text = cleanJSON(response.text || "{}");
+        const text = await fetchAIResponse(prompt, systemInstruction, 'json');
         try {
-            return JSON.parse(jsonrepair(text)) as SEOData;
+            return JSON.parse(jsonrepair(cleanJSON(text || "{}"))) as SEOData;
         } catch (e: any) {
-            console.error("Failed to parse SEO JSON", e, "Raw text sample:", text.slice(-100));
+            console.error("Failed to parse SEO JSON", e, "Raw text sample:", text?.slice(-100));
             throw new Error(`SEO Generation failed: ${e.message || "Invalid JSON structure"}`);
         }
     });

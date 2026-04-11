@@ -1,27 +1,30 @@
 import React, { useState } from 'react';
 import { ScriptAnalysis } from '../../types';
-import { generateViralHooks } from '../../services/geminiService';
+import { generateViralHooks, DEFAULT_SCRIPT_INSTRUCTION, DEFAULT_ANALYZE_INSTRUCTION, DEFAULT_HOOK_INSTRUCTION } from '../../services/geminiService';
 import { TONES } from '../../constants';
+import { InstructionModal } from '../InstructionModal';
 
 interface Props {
   script: string;
   onScriptChange: (val: string) => void;
   analysis: ScriptAnalysis | null;
-  onAnalyze: () => void;
-  onImprove: (instruction: string) => void;
-  onGenerate: (topic: string, tone: string) => void;
+  onAnalyze: (customInstruction?: string) => void;
+  onImprove: (instruction: string, customInstruction?: string) => void;
+  onGenerate: (topic: string, tone: string, customInstruction?: string) => void;
   isAnalyzing: boolean;
   isImproving: boolean;
   onNext: () => void;
+  isAdvancedMode?: boolean;
 }
 
 // --- Icons ---
 const CheckCircle = () => <svg className="w-4 h-4 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" /></svg>;
 const AlertTriangle = () => <svg className="w-4 h-4 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>;
 const MagicWand = () => <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" /></svg>;
+const GearIcon = () => <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>;
 
 export const Step1Settings: React.FC<Props> = ({ 
-  script, onScriptChange, analysis, onAnalyze, onImprove, onGenerate, isAnalyzing, isImproving, onNext
+  script, onScriptChange, analysis, onAnalyze, onImprove, onGenerate, isAnalyzing, isImproving, onNext, isAdvancedMode
 }) => {
   const [topic, setTopic] = useState("");
   const [selectedTone, setSelectedTone] = useState(TONES[0]);
@@ -29,19 +32,28 @@ export const Step1Settings: React.FC<Props> = ({
   const [generatedHooks, setGeneratedHooks] = useState<string[]>([]);
   const [isGeneratingHooks, setIsGeneratingHooks] = useState(false);
 
+  // Advanced Mode States
+  const [customScriptInstruction, setCustomScriptInstruction] = useState(DEFAULT_SCRIPT_INSTRUCTION);
+  const [customAnalyzeInstruction, setCustomAnalyzeInstruction] = useState(DEFAULT_ANALYZE_INSTRUCTION);
+  const [customHookInstruction, setCustomHookInstruction] = useState(DEFAULT_HOOK_INSTRUCTION);
+  
+  const [isScriptModalOpen, setIsScriptModalOpen] = useState(false);
+  const [isAnalyzeModalOpen, setIsAnalyzeModalOpen] = useState(false);
+  const [isHookModalOpen, setIsHookModalOpen] = useState(false);
+
   // If script is empty, we show Generation Mode. If script exists, we show Editor/Analysis mode.
   const isEditorMode = script && script.length > 10;
 
   const handleGenerateClick = () => {
     if(!topic.trim()) return;
-    onGenerate(topic, selectedTone);
+    onGenerate(topic, selectedTone, isAdvancedMode ? customScriptInstruction : undefined);
   };
 
   const handleGenerateHooks = async () => {
     if (!hookTopic.trim()) return;
     setIsGeneratingHooks(true);
     try {
-      const hooks = await generateViralHooks(hookTopic);
+      const hooks = await generateViralHooks(hookTopic, isAdvancedMode ? customHookInstruction : undefined);
       setGeneratedHooks(hooks);
     } catch (e) {
       console.error(e);
@@ -76,9 +88,20 @@ export const Step1Settings: React.FC<Props> = ({
            <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/10 rounded-full blur-3xl"></div>
            
            <div className="flex items-center justify-between mb-4 relative z-10">
-              <label className="text-xs font-bold text-indigo-400 uppercase tracking-widest flex items-center gap-2">
-                 1. STORY GENERATOR
-              </label>
+              <div className="flex items-center gap-2">
+                <label className="text-xs font-bold text-indigo-400 uppercase tracking-widest flex items-center gap-2">
+                   1. STORY GENERATOR
+                </label>
+                {isAdvancedMode && (
+                  <button 
+                    onClick={() => setIsScriptModalOpen(true)} 
+                    className="text-amber-500 hover:text-amber-400 p-1 rounded hover:bg-amber-500/10 transition-colors" 
+                    title="Edit AI Instructions"
+                  >
+                    <GearIcon />
+                  </button>
+                )}
+              </div>
               {isEditorMode && (
                 <button 
                   onClick={() => onScriptChange("")}
@@ -184,9 +207,18 @@ export const Step1Settings: React.FC<Props> = ({
             </div>
 
             {/* Action Bar */}
-            <div className="flex justify-end gap-3">
+            <div className="flex justify-end gap-3 items-center">
+               {isAdvancedMode && (
+                 <button 
+                   onClick={() => setIsAnalyzeModalOpen(true)} 
+                   className="text-amber-500 hover:text-amber-400 p-2 rounded hover:bg-amber-500/10 transition-colors" 
+                   title="Edit AI Instructions"
+                 >
+                   <GearIcon />
+                 </button>
+               )}
                <button
-                 onClick={onAnalyze}
+                 onClick={() => onAnalyze(isAdvancedMode ? customAnalyzeInstruction : undefined)}
                  disabled={isAnalyzing}
                  className="px-6 py-3 bg-[#1F2937] hover:bg-gray-700 text-gray-300 font-bold text-xs uppercase tracking-wider rounded-xl transition-all border border-gray-700"
                >
@@ -205,6 +237,15 @@ export const Step1Settings: React.FC<Props> = ({
             <div className="mt-2 border-t border-gray-800 pt-4">
               <div className="flex items-center gap-2 mb-3">
                 <span className="text-pink-400 font-bold text-xs uppercase tracking-wider">⚡ VIRAL HOOK LAB</span>
+                {isAdvancedMode && (
+                  <button 
+                    onClick={() => setIsHookModalOpen(true)} 
+                    className="text-amber-500 hover:text-amber-400 p-1 rounded hover:bg-amber-500/10 transition-colors" 
+                    title="Edit AI Instructions"
+                  >
+                    <GearIcon />
+                  </button>
+                )}
               </div>
               <div className="flex gap-2 mb-3">
                   <input 
@@ -244,9 +285,20 @@ export const Step1Settings: React.FC<Props> = ({
       {analysis && (
         <div className="xl:w-[400px] flex flex-col gap-6 animate-slide-left">
            
-           <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">
-              2. AI Analysis Report
-           </label>
+           <div className="flex items-center justify-between">
+             <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">
+                2. AI Analysis Report
+             </label>
+             {isAdvancedMode && (
+                <button 
+                  onClick={() => setIsAnalyzeModalOpen(true)} 
+                  className="text-amber-500 hover:text-amber-400 p-1 rounded hover:bg-amber-500/10 transition-colors" 
+                  title="Edit AI Instructions"
+                >
+                  <GearIcon />
+                </button>
+             )}
+           </div>
 
            <div className="flex-1 bg-[#161b22] border border-gray-800 rounded-xl overflow-hidden flex flex-col shadow-2xl">
               
@@ -286,9 +338,9 @@ export const Step1Settings: React.FC<Props> = ({
                        <div className="h-px bg-gray-800 flex-1"></div>
                     </h4>
                     <div className="space-y-2">
-                       {analysis.factCheck.map((fact, i) => (
+                       {(analysis.factCheck || []).map((fact, i) => (
                           <div key={i} className="flex items-start gap-2 text-xs text-gray-300 bg-[#0d1117] p-2 rounded border border-gray-800">
-                             {fact.toLowerCase().includes('verified') ? <CheckCircle /> : <AlertTriangle />}
+                             {fact && fact.toLowerCase().includes('verified') ? <CheckCircle /> : <AlertTriangle />}
                              <span className="leading-relaxed">{fact}</span>
                           </div>
                        ))}
@@ -302,14 +354,18 @@ export const Step1Settings: React.FC<Props> = ({
                        <div className="h-px bg-gray-800 flex-1"></div>
                     </h4>
                     <div className="space-y-2">
-                       <div className="text-xs text-green-300 flex gap-2">
-                          <span className="font-bold shrink-0">+</span>
-                          {analysis.strengths[0]}
-                       </div>
-                       <div className="text-xs text-red-300 flex gap-2">
-                          <span className="font-bold shrink-0">-</span>
-                          {analysis.weaknesses[0]}
-                       </div>
+                       {analysis.strengths && analysis.strengths.length > 0 && (
+                         <div className="text-xs text-green-300 flex gap-2">
+                            <span className="font-bold shrink-0">+</span>
+                            {analysis.strengths[0]}
+                         </div>
+                       )}
+                       {analysis.weaknesses && analysis.weaknesses.length > 0 && (
+                         <div className="text-xs text-red-300 flex gap-2">
+                            <span className="font-bold shrink-0">-</span>
+                            {analysis.weaknesses[0]}
+                         </div>
+                       )}
                     </div>
                  </div>
 
@@ -320,28 +376,28 @@ export const Step1Settings: React.FC<Props> = ({
                  <p className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest mb-3">AI Editor Actions</p>
                  <div className="grid grid-cols-2 gap-2">
                     <button 
-                       onClick={() => onImprove("Make the hook more viral and shocking.")}
+                       onClick={() => onImprove("Make the hook more viral and shocking.", isAdvancedMode ? customAnalyzeInstruction : undefined)}
                        disabled={isImproving}
                        className="bg-[#1F2937] hover:bg-indigo-900/30 border border-gray-700 hover:border-indigo-500/50 text-gray-300 text-[10px] font-bold py-2 rounded transition-all flex items-center justify-center gap-1 disabled:opacity-50"
                     >
                        {isImproving ? <span className="animate-pulse">Processing...</span> : <><MagicWand /> Boost Hook</>}
                     </button>
                     <button 
-                       onClick={() => onImprove("Fix grammar and make the tone more conversational.")}
+                       onClick={() => onImprove("Fix grammar and make the tone more conversational.", isAdvancedMode ? customAnalyzeInstruction : undefined)}
                        disabled={isImproving}
                        className="bg-[#1F2937] hover:bg-indigo-900/30 border border-gray-700 hover:border-indigo-500/50 text-gray-300 text-[10px] font-bold py-2 rounded transition-all disabled:opacity-50"
                     >
                        {isImproving ? <span className="animate-pulse">Processing...</span> : "Fix Grammar"}
                     </button>
                     <button 
-                       onClick={() => onImprove("Make the script shorter and more punchy (under 40s).")}
+                       onClick={() => onImprove("Make the script shorter and more punchy (under 40s).", isAdvancedMode ? customAnalyzeInstruction : undefined)}
                        disabled={isImproving}
                        className="bg-[#1F2937] hover:bg-indigo-900/30 border border-gray-700 hover:border-indigo-500/50 text-gray-300 text-[10px] font-bold py-2 rounded transition-all disabled:opacity-50"
                     >
                        {isImproving ? <span className="animate-pulse">Processing...</span> : "Shorten"}
                     </button>
                     <button 
-                       onClick={() => onImprove(analysis.improvementSuggestion)}
+                       onClick={() => onImprove(analysis.improvementSuggestion, isAdvancedMode ? customAnalyzeInstruction : undefined)}
                        disabled={isImproving}
                        className="bg-indigo-600 hover:bg-indigo-500 text-white border border-indigo-500 text-[10px] font-bold py-2 rounded transition-all shadow-lg shadow-indigo-900/20 disabled:opacity-50"
                     >
@@ -359,6 +415,32 @@ export const Step1Settings: React.FC<Props> = ({
 
         </div>
       )}
+
+      {/* Advanced Mode Modals */}
+      <InstructionModal
+        isOpen={isScriptModalOpen}
+        onClose={() => setIsScriptModalOpen(false)}
+        title="Script Generator"
+        instruction={customScriptInstruction}
+        onInstructionChange={setCustomScriptInstruction}
+        defaultInstruction={DEFAULT_SCRIPT_INSTRUCTION}
+      />
+      <InstructionModal
+        isOpen={isAnalyzeModalOpen}
+        onClose={() => setIsAnalyzeModalOpen(false)}
+        title="Analyze & Improve"
+        instruction={customAnalyzeInstruction}
+        onInstructionChange={setCustomAnalyzeInstruction}
+        defaultInstruction={DEFAULT_ANALYZE_INSTRUCTION}
+      />
+      <InstructionModal
+        isOpen={isHookModalOpen}
+        onClose={() => setIsHookModalOpen(false)}
+        title="Viral Hook Lab"
+        instruction={customHookInstruction}
+        onInstructionChange={setCustomHookInstruction}
+        defaultInstruction={DEFAULT_HOOK_INSTRUCTION}
+      />
 
     </div>
   );

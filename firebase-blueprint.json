@@ -2,7 +2,7 @@
   "entities": {
     "Session": {
       "title": "Session",
-      "description": "A saved project or season in the app.",
+      "description": "A saved project or session in the app.",
       "type": "object",
       "properties": {
         "uid": {
@@ -54,6 +54,31 @@
         }
       },
       "required": ["uid", "name", "instructions", "createdAt"]
+    },
+    "ModelCache": {
+      "title": "ModelCache",
+      "description": "Cached AI models for a specific provider.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "The user ID of the owner."
+        },
+        "providerId": {
+          "type": "string",
+          "description": "The ID of the provider (e.g., 'openrouter')."
+        },
+        "models": {
+          "type": "string",
+          "description": "JSON stringified array of AIModel objects."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When the cache was last updated."
+        }
+      },
+      "required": ["uid", "providerId", "models", "updatedAt"]
     }
   },
   "firestore": {
@@ -68,6 +93,12 @@
         "$ref": "#/entities/Preset"
       },
       "description": "Stores user AI instruction presets."
+    },
+    "/modelCache/{cacheId}": {
+      "schema": {
+        "$ref": "#/entities/ModelCache"
+      },
+      "description": "Stores cached AI models per provider."
     }
   }
 }

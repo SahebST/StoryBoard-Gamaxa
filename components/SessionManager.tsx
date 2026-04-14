@@ -4,6 +4,8 @@ import { signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged, User 
 import { saveSessionToFirebase, loadSessionFromFirebase, listUserSessions, SessionMeta, deleteSessionFromFirebase } from '../services/sessionService';
 import { AppState } from '../types';
 import { ConfirmModal } from './ConfirmModal';
+import { X } from 'lucide-react';
+import { createPortal } from 'react-dom';
 
 interface SessionManagerProps {
   currentState: AppState;
@@ -75,13 +77,13 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ currentState, on
 
   const handleSaveSession = async () => {
     if (!user) {
-      console.error("Please log in to save your season.");
+      console.error("Please log in to save your session.");
       return;
     }
     
     let nameToSave = sessionTitle;
     if (!nameToSave) {
-      nameToSave = currentState.topic || "Untitled Season";
+      nameToSave = currentState.topic || "Untitled Session";
     }
     // Ensure name is within 100 characters to pass Firestore rules
     if (nameToSave.length > 100) {
@@ -99,20 +101,20 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ currentState, on
       onSessionTitleChange(nameToSave);
       await fetchSessions();
     } catch (error: any) {
-      console.error(`Failed to save season: ${error.message}`);
+      console.error(`Failed to save session: ${error.message}`);
     }
     setIsLoading(false);
   };
 
   const handleDuplicateSession = async () => {
     if (!user) {
-      console.error("Please log in to duplicate your season.");
+      console.error("Please log in to duplicate your session.");
       return;
     }
     
     let baseName = sessionTitle;
     if (!baseName) {
-      baseName = currentState.topic || "Untitled Season";
+      baseName = currentState.topic || "Untitled Session";
     }
     
     let nameToSave = `${baseName} v2`;
@@ -138,7 +140,7 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ currentState, on
       onSessionTitleChange(nameToSave);
       await fetchSessions();
     } catch (error: any) {
-      console.error(`Failed to duplicate season: ${error.message}`);
+      console.error(`Failed to duplicate session: ${error.message}`);
     }
     setIsLoading(false);
   };
@@ -153,10 +155,10 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ currentState, on
         if (session) onSessionTitleChange(session.name);
         setIsModalOpen(false);
       } else {
-        console.error("Failed to load season data.");
+        console.error("Failed to load session data.");
       }
     } catch (error: any) {
-      console.error(`Failed to load season: ${error.message}`);
+      console.error(`Failed to load session: ${error.message}`);
     }
     setIsLoading(false);
   };
@@ -172,7 +174,7 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ currentState, on
       }
       await fetchSessions();
     } catch (error: any) {
-      console.error(`Failed to delete season: ${error.message}`);
+      console.error(`Failed to delete session: ${error.message}`);
     }
     setSessionToDelete(null);
     setIsLoading(false);
@@ -187,110 +189,183 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ currentState, on
 
   return (
     <>
-      <div className={`flex ${isSidebar ? 'flex-col' : 'items-center'} gap-2 ${!isSidebar ? 'bg-[#161b22]/80 backdrop-blur-md p-1 rounded-lg border border-gray-700/50 shadow-lg' : ''}`}>
+      <div className={`flex ${isSidebar ? 'flex-col' : 'items-center'} gap-3 ${!isSidebar ? 'bg-[#161b22]/80 backdrop-blur-md p-1.5 rounded-xl border border-gray-700/50 shadow-xl' : ''}`}>
         {!user ? (
-        <button onClick={handleLogin} className={`text-xs bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-400 border border-indigo-500/30 px-2.5 py-1.5 rounded-md font-bold transition-colors flex items-center gap-2 ${isSidebar ? 'w-full justify-start py-2 px-3' : ''}`}>
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" /></svg>
-          <span className={isSidebar ? '' : 'hidden lg:inline'}>Cloud Login</span>
+        <button 
+          onClick={handleLogin} 
+          className={`text-xs bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-lg font-bold transition-all hover:shadow-[0_0_20px_rgba(99,102,241,0.4)] flex items-center justify-center gap-2 ${isSidebar ? 'w-full' : ''}`}
+        >
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3 3V7a3 3 0 013-3h7a3 3 0 013 3v1" /></svg>
+          <span>Cloud Login</span>
         </button>
       ) : (
-        <>
-          <div className={`flex items-center gap-2 bg-gray-900/50 rounded-md p-1 pr-2 border border-gray-700/50 ${isSidebar ? 'w-full mb-2' : 'mr-1'}`}>
-            <img src={user.photoURL || ''} alt="User" className="w-5 h-5 rounded-full" />
-            <span className={`text-[10px] text-gray-400 truncate ${isSidebar ? 'flex-1' : 'max-w-[80px] hidden sm:inline'}`}>{user.displayName}</span>
-            <button onClick={handleLogout} className="text-[10px] text-gray-500 hover:text-red-400 ml-1 transition-colors" title="Logout">
-              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
+        <div className={`flex flex-col gap-3 ${isSidebar ? 'w-full' : ''}`}>
+          {/* User Profile Card */}
+          <div className="bg-gradient-to-br from-gray-900/80 via-[#161b22]/90 to-indigo-900/20 backdrop-blur-md rounded-xl p-3 border border-gray-800/50 flex items-center gap-3 group transition-all hover:border-indigo-500/40 shadow-[inset_0_0_20px_rgba(0,0,0,0.4)]">
+            <div className="relative w-11 h-11 flex items-center justify-center">
+              {/* RGB Rotating Ring */}
+              <div className="absolute inset-0 rounded-full animate-rotate-gradient" 
+                style={{ 
+                  background: 'conic-gradient(from 0deg, #ff0000, #ff7f00, #ffff00, #00ff00, #00ffff, #0000ff, #8b00ff, #ff0000)',
+                  filter: 'blur(1px)'
+                }} 
+              />
+              {/* Inner Dark Mask to create the ring effect */}
+              <div className="absolute inset-[2px] bg-[#0d1117] rounded-full z-10" />
+              
+              {/* Profile Image */}
+              <img src={user.photoURL || ''} alt="User" className="w-9 h-9 rounded-full relative z-20" />
+              
+              {/* Online Status Indicator */}
+              <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-emerald-500 border-2 border-[#0d1117] rounded-full shadow-[0_0_10px_rgba(16,185,129,0.5)] z-30"></div>
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-black text-white truncate tracking-tight group-hover:text-indigo-300 transition-colors">{user.displayName}</p>
+              <p className="text-[10px] text-gray-500 truncate font-medium">{user.email}</p>
+            </div>
+            <button 
+              onClick={handleLogout} 
+              className="p-2 text-gray-500 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-all active:scale-90" 
+              title="Logout"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
             </button>
           </div>
           
-          <button 
-            onClick={() => setIsConfirmingNew(true)}
-            className={`text-xs bg-emerald-600/20 hover:bg-emerald-600/40 text-emerald-400 px-2.5 py-1.5 rounded-md font-bold transition-colors flex items-center gap-2 ${isSidebar ? 'w-full justify-start py-2 px-3' : ''}`}
-            title="Start New Season"
-          >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" /></svg>
-            <span className={isSidebar ? '' : 'hidden lg:inline'}>New</span>
-          </button>
+          {/* Action Grid */}
+          <div className="grid grid-cols-2 gap-2">
+            <button 
+              onClick={() => setIsConfirmingNew(true)}
+              className="text-[10px] bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 p-2 rounded-lg font-black transition-all flex items-center justify-center gap-1.5 hover:shadow-[0_0_15px_rgba(16,185,129,0.2)] active:scale-95 uppercase tracking-wider"
+              title="Start New Session"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" /></svg>
+              <span>New</span>
+            </button>
 
-          <button 
-            onClick={() => { setIsModalOpen(true); fetchSessions(); }}
-            className={`text-xs text-gray-400 hover:text-white hover:bg-gray-700 px-2.5 py-1.5 rounded-md font-bold transition-colors flex items-center gap-2 ${isSidebar ? 'w-full justify-start py-2 px-3' : ''}`}
-            title="Load Season from Cloud"
-          >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z" /></svg>
-            <span className={isSidebar ? '' : 'hidden lg:inline'}>Cloud Load</span>
-          </button>
+            <button 
+              onClick={() => { setIsModalOpen(true); fetchSessions(); }}
+              className="text-[10px] bg-sky-500/10 hover:bg-sky-500/20 text-sky-400 border border-sky-500/30 p-2 rounded-lg font-black transition-all flex items-center justify-center gap-1.5 hover:shadow-[0_0_15px_rgba(14,165,233,0.2)] active:scale-95 uppercase tracking-wider"
+              title="Load Session from Cloud"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z" /></svg>
+              <span>Load</span>
+            </button>
 
-          <button 
-            onClick={handleSaveSession}
-            disabled={isLoading}
-            className={`text-xs bg-indigo-600 hover:bg-indigo-500 text-white px-2.5 py-1.5 rounded-md font-bold transition-colors disabled:opacity-50 flex items-center gap-2 ${isSidebar ? 'w-full justify-start py-2 px-3' : ''}`}
-            title="Save Season to Cloud"
-          >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" /></svg>
-            <span className={isSidebar ? '' : 'hidden lg:inline'}>{isLoading ? 'Saving...' : 'Cloud Save'}</span>
-          </button>
+            <button 
+              onClick={handleSaveSession}
+              disabled={isLoading}
+              className="col-span-2 text-[10px] bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 text-white p-2.5 rounded-lg font-black transition-all flex items-center justify-center gap-2 shadow-lg shadow-indigo-900/40 hover:shadow-indigo-500/50 active:scale-[0.98] disabled:opacity-50 uppercase tracking-widest"
+              title="Save Session to Cloud"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" /></svg>
+              <span>{isLoading ? 'Saving...' : 'Cloud Save'}</span>
+            </button>
 
-          <button 
-            onClick={handleDuplicateSession}
-            disabled={isLoading}
-            className={`text-xs bg-purple-600/20 hover:bg-purple-600/40 text-purple-400 border border-purple-500/30 px-2.5 py-1.5 rounded-md font-bold transition-colors disabled:opacity-50 flex items-center gap-2 ${isSidebar ? 'w-full justify-start py-2 px-3' : ''}`}
-            title="Duplicate Current Season"
-          >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2" /></svg>
-            <span className={isSidebar ? '' : 'hidden lg:inline'}>Duplicate</span>
-          </button>
-        </>
+            <button 
+              onClick={handleDuplicateSession}
+              disabled={isLoading}
+              className="col-span-2 text-[10px] bg-purple-600/10 hover:bg-purple-600/20 text-purple-400 border border-purple-500/30 p-2 rounded-lg font-black transition-all flex items-center justify-center gap-2 disabled:opacity-50 hover:shadow-[0_0_15px_rgba(168,85,247,0.2)] active:scale-[0.98] uppercase tracking-wider"
+              title="Duplicate Current Session"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2" /></svg>
+              <span>Duplicate Session</span>
+            </button>
+          </div>
+        </div>
       )}
       </div>
 
-      {isModalOpen && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
-          <div className="bg-[#0f1218] border border-gray-800 rounded-2xl w-full max-w-4xl overflow-hidden shadow-2xl flex flex-col max-h-[85vh]">
-            <div className="p-5 border-b border-gray-800 flex justify-between items-center bg-[#161b22]">
-              <h2 className="text-xl font-bold text-white flex items-center gap-2">
-                <svg className="w-5 h-5 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z" /></svg>
-                Your Cloud Seasons
-              </h2>
-              <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-white transition-colors p-1 rounded-lg hover:bg-gray-800">
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+      {isModalOpen && createPortal(
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6">
+          <div 
+            className="absolute inset-0 bg-black/80 backdrop-blur-sm animate-in fade-in duration-300"
+            onClick={() => setIsModalOpen(false)}
+          />
+          
+          <div className="relative w-full max-w-4xl max-h-[90vh] bg-[#111827] border border-gray-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-300">
+            {/* Header */}
+            <div className="flex items-center justify-between p-6 border-b border-gray-800 bg-[#161b22]/50">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-indigo-500/20 rounded-lg">
+                  <svg className="w-6 h-6 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z" /></svg>
+                </div>
+                <div>
+                  <h2 className="text-xl font-bold text-white">Cloud Sessions</h2>
+                  <p className="text-xs text-gray-400 uppercase tracking-widest mt-0.5">Manage and load your saved progress</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setIsModalOpen(false)} 
+                className="p-2 hover:bg-gray-800 rounded-full transition-colors text-gray-400 hover:text-white"
+              >
+                <X className="w-6 h-6" />
               </button>
             </div>
             
-            <div className="p-6 overflow-y-auto flex-1 custom-scrollbar bg-[#0B0F19]">
-              {isLoading ? (
-                <div className="text-center py-12 text-gray-400 flex flex-col items-center gap-3">
-                  <div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
-                  <p>Loading seasons...</p>
+            {/* Content */}
+            <div className="flex-1 overflow-y-auto p-6 sm:p-8 custom-scrollbar">
+              <div className="max-w-7xl mx-auto">
+              {isLoading && sessions.length === 0 ? (
+                <div className="text-center py-32 text-gray-400 flex flex-col items-center gap-6">
+                  <div className="w-16 h-16 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin shadow-[0_0_20px_rgba(99,102,241,0.3)]"></div>
+                  <p className="text-xl font-bold tracking-tight">Syncing with cloud...</p>
                 </div>
               ) : sessions.length === 0 ? (
-                <div className="text-center py-12 text-gray-500 flex flex-col items-center gap-3">
-                  <svg className="w-12 h-12 text-gray-700" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" /></svg>
-                  <p>No saved seasons found in the cloud.</p>
+                <div className="text-center py-32 text-gray-500 flex flex-col items-center gap-6">
+                  <div className="w-24 h-24 bg-gray-900/50 rounded-3xl flex items-center justify-center border border-gray-800 shadow-inner">
+                    <svg className="w-12 h-12 text-gray-700" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" /></svg>
+                  </div>
+                  <div className="max-w-md">
+                    <p className="text-2xl font-black text-gray-400">No sessions found</p>
+                    <p className="text-gray-600 mt-2">Start a new project and save it to the cloud to see it here. Your work is automatically backed up when you click Save.</p>
+                  </div>
                 </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {sessions.map(session => (
-                    <div key={session.id} className={`flex flex-col justify-between p-5 rounded-xl border transition-all ${currentState.sessionId === session.id ? 'bg-indigo-900/20 border-indigo-500/50 shadow-[0_0_15px_rgba(99,102,241,0.1)]' : 'bg-[#161b22] border-gray-800 hover:border-gray-700 hover:shadow-lg hover:bg-[#1a202c]'}`}>
-                      <div className="mb-4">
-                        <h3 className="font-bold text-gray-200 text-lg line-clamp-1" title={session.name || 'Untitled Season'}>{session.name || 'Untitled Season'}</h3>
-                        <div className="flex items-center gap-2 mt-2 text-xs text-gray-500">
-                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                          <span>{new Date(session.updatedAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}</span>
+                    <div 
+                      key={session.id} 
+                      className={`group relative flex flex-col p-4 rounded-xl border transition-all duration-300 ${
+                        currentState.sessionId === session.id 
+                        ? 'bg-indigo-500/5 border-indigo-500 shadow-[0_0_20px_rgba(99,102,241,0.1)] ring-1 ring-indigo-500/50' 
+                        : 'bg-[#161b22] border-gray-800 hover:border-gray-600 hover:shadow-xl hover:-translate-y-1'
+                      }`}
+                    >
+                      {currentState.sessionId === session.id && (
+                        <div className="absolute -top-2 -right-2 bg-indigo-500 text-white text-[10px] font-black px-2 py-0.5 rounded-full shadow-lg z-10 animate-pulse">
+                          ACTIVE
+                        </div>
+                      )}
+                      
+                      <div className="flex-1 min-w-0 mb-4">
+                        <h3 className="font-bold text-gray-100 text-lg truncate pr-6 group-hover:text-indigo-400 transition-colors duration-300" title={session.name || 'Untitled Session'}>
+                          {session.name || 'Untitled Session'}
+                        </h3>
+                        <div className="flex flex-col gap-1.5 mt-3">
+                          <div className="flex items-center gap-2 text-[11px] text-gray-500 bg-gray-900/50 px-2 py-1 rounded-lg w-fit">
+                            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                            <span>{new Date(session.createdAt).toLocaleDateString()}</span>
+                          </div>
+                          <div className="flex items-center gap-2 text-[11px] text-indigo-400/70 bg-indigo-500/5 px-2 py-1 rounded-lg w-fit">
+                            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                            <span>Modified: {new Date(session.updatedAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}</span>
+                          </div>
                         </div>
                       </div>
-                      <div className="flex gap-2 mt-auto pt-4 border-t border-gray-800/50">
+
+                      <div className="flex gap-2 items-center pt-4 border-t border-gray-800/50">
                         <button 
                           onClick={() => handleLoadSession(session.id)}
-                          className="flex-1 bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-lg text-sm font-bold transition-colors flex items-center justify-center gap-2"
+                          className="flex-1 bg-indigo-600 hover:bg-indigo-500 text-white h-10 rounded-xl text-sm font-bold transition-all duration-300 flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/20 active:scale-95"
                         >
                           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
-                          Load
+                          Load Session
                         </button>
                         <button 
                           onClick={() => setSessionToDelete(session.id)}
-                          className="bg-red-900/20 hover:bg-red-900/40 text-red-400 border border-red-900/30 hover:border-red-500/50 px-4 py-2 rounded-lg text-sm font-bold transition-colors flex items-center justify-center"
-                          title="Delete Season"
+                          className="w-10 h-10 bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white border border-red-500/20 hover:border-red-500 rounded-xl transition-all duration-300 flex items-center justify-center active:scale-95"
+                          title="Delete Session"
                         >
                           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                         </button>
@@ -299,14 +374,16 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ currentState, on
                   ))}
                 </div>
               )}
+              </div>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       <ConfirmModal
         isOpen={isConfirmingNew}
-        title="Start New Season"
+        title="Start New Session"
         message="Are you sure? This will clear all current progress."
         onConfirm={confirmNewSession}
         onCancel={() => setIsConfirmingNew(false)}
@@ -314,8 +391,8 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ currentState, on
 
       <ConfirmModal
         isOpen={!!sessionToDelete}
-        title="Delete Season"
-        message="Are you sure you want to delete this season? This action cannot be undone."
+        title="Delete Session"
+        message="Are you sure you want to delete this session? This action cannot be undone."
         onConfirm={confirmDeleteSession}
         onCancel={() => setSessionToDelete(null)}
         isDestructive={true}

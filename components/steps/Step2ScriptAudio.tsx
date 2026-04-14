@@ -3,6 +3,7 @@ import { VOICES } from '../../constants';
 import { base64PCMToWavBlob, DEFAULT_MUSIC_INSTRUCTION } from '../../services/geminiService';
 import { ScriptSettings } from '../../types';
 import { InstructionModal } from '../InstructionModal';
+import { AudioVisualizer } from '../AudioVisualizer';
 
 interface Props {
   script: string;
@@ -285,18 +286,13 @@ export const Step2ScriptAudio: React.FC<Props> = ({
                  )}
                </button>
                
-               {/* Visualizer bars (fake) */}
-               <div className="flex-1 flex items-end gap-[2px] h-full py-2 opacity-50 z-0">
-                  {Array.from({ length: 40 }).map((_, i) => (
-                    <div 
-                      key={i} 
-                      className="bg-gray-500 w-full rounded-t-sm transition-all duration-300"
-                      style={{ 
-                        height: isPlaying ? `${Math.random() * 80 + 20}%` : '30%',
-                        opacity: isPlaying ? 1 : 0.3
-                      }}
-                    ></div>
-                  ))}
+               {/* Visualizer */}
+               <div className="flex-1 h-full py-2 z-0">
+                  <AudioVisualizer 
+                    audioElement={audioRef.current} 
+                    isPlaying={isPlaying} 
+                    isAdvancedMode={isAdvancedMode}
+                  />
                </div>
              </>
            ) : (

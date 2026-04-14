@@ -32,8 +32,8 @@ const getGenAI = () => {
 // --- Model Configuration ---
 const FALLBACK_GOOGLE_MODELS: AIModel[] = [
   {
-    id: 'gemini-3-flash-preview',
-    name: 'Gemini 3 Flash (Latest)',
+    id: 'gemini-2.5-flash',
+    name: 'Gemini 2.5 Flash',
     provider: 'google',
     context: 1000000,
     output: 8192,
@@ -42,7 +42,7 @@ const FALLBACK_GOOGLE_MODELS: AIModel[] = [
     speed: 'fast',
     cost: 'free',
     capabilities: ['chat', 'vision', 'tools'],
-    labels: ['fast', 'balanced', 'best for real-time'],
+    labels: ['FREE', 'free-tier', 'fast', 'balanced', 'best for real-time'],
     score: 95
   },
   {
@@ -56,7 +56,7 @@ const FALLBACK_GOOGLE_MODELS: AIModel[] = [
     speed: 'balanced',
     cost: 'free',
     capabilities: ['chat', 'vision', 'tools', 'reasoning', 'long-context'],
-    labels: ['reasoning', 'complex', 'ultra-context'],
+    labels: ['FREE', 'free-tier', 'reasoning', 'complex', 'ultra-context'],
     score: 98
   },
   {
@@ -70,7 +70,7 @@ const FALLBACK_GOOGLE_MODELS: AIModel[] = [
     speed: 'fast',
     cost: 'free',
     capabilities: ['chat', 'vision'],
-    labels: ['fast', 'lightweight'],
+    labels: ['FREE', 'free-tier', 'fast', 'lightweight'],
     score: 85
   },
   {
@@ -84,12 +84,12 @@ const FALLBACK_GOOGLE_MODELS: AIModel[] = [
     speed: 'fast',
     cost: 'free',
     capabilities: ['vision'],
-    labels: ['image-gen'],
+    labels: ['FREE', 'free-tier', 'image-gen'],
     score: 90
   }
 ];
 
-let activeModel = 'gemini-3-flash-preview';
+let activeModel = 'gemini-2.5-flash';
 let activeProvider = 'google';
 
 export const setActiveModel = (model: string, provider: string = 'google') => {
@@ -148,6 +148,10 @@ export const fetchModels = async (provider: string): Promise<AIModel[]> => {
           if (id.includes('vision') || isImage) capabilities.push('vision');
           if (inputLimit > 100000) capabilities.push('long-context');
           
+          const labels = isPro ? ['reasoning', 'complex'] : ['fast', 'balanced'];
+          labels.push('FREE');
+          labels.push('free-tier');
+          
           return {
             id,
             name: m.displayName || m.display_name || id,
@@ -159,7 +163,7 @@ export const fetchModels = async (provider: string): Promise<AIModel[]> => {
             speed: isFlash ? 'fast' : 'balanced',
             cost: 'free',
             capabilities,
-            labels: isPro ? ['reasoning', 'complex'] : ['fast', 'balanced'],
+            labels,
             score: isPro ? 90 : 80
           };
         });
@@ -211,7 +215,7 @@ async function callWithRetry<T>(fn: () => Promise<T>, retries = 3, baseDelay = 3
   throw new Error("Max retries exceeded");
 }
 
-async function fetchAIResponse(prompt: string, systemInstruction?: string, responseFormat?: 'json') {
+export async function fetchAIResponse(prompt: string, systemInstruction?: string, responseFormat?: 'json') {
   if (activeProvider === 'google') {
     // Use SDK for Google models on the frontend
     const ai = getGenAI();
@@ -224,7 +228,14 @@ async function fetchAIResponse(prompt: string, systemInstruction?: string, respo
     };
 
     // The SDK uses camelCase for the config object
-    const config: any = {};
+    const config: any = {
+      safetySettings: [
+        { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
+        { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
+        { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
+        { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' }
+      ]
+    };
     
     if (systemInstruction) {
       config.systemInstruction = { parts: [{ text: systemInstruction }] };
@@ -240,7 +251,20 @@ async function fetchAIResponse(prompt: string, systemInstruction?: string, respo
     }
 
     const response = await ai.models.generateContent(options);
-    return response.text;
+    
+    // Safely extract text
+    let text = '';
+    if (response.text) {
+      text = response.text;
+    } else if (response.candidates?.[0]?.content?.parts?.[0]?.text) {
+      text = response.candidates[0].content.parts[0].text;
+    }
+    
+    if (!text) {
+      console.warn("Empty text in AI response:", response);
+    }
+    
+    return text;
   }
 
   // Use backend for other providers
@@ -422,8 +446,59 @@ export const analyzeScript = async (script: string, customInstruction?: string):
   });
 };
 
-export const improveScript = async (script: string, instruction: string, customInstruction?: string): Promise<string> => {
-  const systemInstruction = customInstruction?.trim() || DEFAULT_IMPROVE_INSTRUCTION;
+export const analyzeScriptForVisuals = async (script: string, availablePresets: string[]): Promise<{
+  styles_generated: string[];
+  best_presets: string[];
+  estimated_duration_sec: number;
+}> => {
+  const systemInstruction = `You are an expert video director and script analyst. Your job is to analyze a script and suggest visual styles and estimate its duration.`;
+
+  const prompt = `
+  TASK: Analyze the following script to generate custom visual styles, match with existing presets, and estimate the audio duration.
+
+  SCRIPT:
+  "${script}"
+
+  AVAILABLE PRESETS:
+  ${JSON.stringify(availablePresets)}
+
+  REQUIREMENTS:
+  1. Generate 3 new, distinct, and usable custom visual styles based on the script's tone and content.
+  2. Select the best 2 preset styles from the AVAILABLE PRESETS list that are most relevant to the script.
+  3. Estimate the total audio duration in seconds based on a natural speech pace (roughly 150 words per minute).
+
+  IMPORTANT: Return ONLY valid JSON matching this schema exactly:
+  {
+    "styles_generated": [
+      "style_1",
+      "style_2",
+      "style_3"
+    ],
+    "best_presets": [
+      "preset_1",
+      "preset_2"
+    ],
+    "estimated_duration_sec": number
+  }
+  `;
+
+  return callWithRetry(async () => {
+    const text = await fetchAIResponse(prompt, systemInstruction, 'json');
+    try {
+      return JSON.parse(jsonrepair(cleanJSON(text || "{}")));
+    } catch (e) {
+      console.error("Failed to parse visual analysis JSON", e);
+      throw new Error("Visual analysis failed");
+    }
+  });
+};
+
+export const improveScript = async (script: string, instruction: string, customInstruction?: string, globalDirection?: string): Promise<string> => {
+  let systemInstruction = customInstruction?.trim() || DEFAULT_IMPROVE_INSTRUCTION;
+  
+  if (globalDirection?.trim()) {
+    systemInstruction += `\n\n--- GLOBAL DIRECTION ---\n${globalDirection}`;
+  }
 
   const prompt = `
   TASK: Rewrite this script to address the following instruction.
@@ -668,7 +743,8 @@ export const segmentScript = async (
   mode: 'visual' | 't2v' = 'visual',
   totalDuration?: number,
   userInstruction: string = "",
-  customSystemInstruction?: string
+  customSystemInstruction?: string,
+  stageDirection: string = ""
 ): Promise<Scene[]> => {
   let systemInstruction = customSystemInstruction;
   if (!systemInstruction) {
@@ -676,9 +752,15 @@ export const segmentScript = async (
   }
 
   // Append user instruction if provided and we are not fully overriding
-  const finalSystemInstruction = (!customSystemInstruction && userInstruction && userInstruction.trim())
-  ? `${systemInstruction}\n\n--- ADDITIONAL USER DIRECTION ---\nThe user has provided specific instructions to guide your generation:\n"${userInstruction}"\n\nEnsure you adhere to these instructions alongside the core protocol.`
-  : systemInstruction;
+  let finalSystemInstruction = systemInstruction;
+  if (!customSystemInstruction) {
+    if (userInstruction?.trim()) {
+      finalSystemInstruction += `\n\n--- GLOBAL DIRECTION ---\n${userInstruction}`;
+    }
+    if (stageDirection?.trim()) {
+      finalSystemInstruction += `\n\n--- STAGE-SPECIFIC DIRECTION (OVERRIDES GLOBAL) ---\n${stageDirection}`;
+    }
+  }
 
   const prompt = `
   SCRIPT:
@@ -781,9 +863,13 @@ export const generateSceneImage = async (prompt: string, aspectRatio: string): P
 
 // --- SEO Generation ---
 
-export const generateSEO = async (script: string, audience: string, tone: string, customInstruction?: string): Promise<SEOData> => {
+export const generateSEO = async (script: string, audience: string, tone: string, customInstruction?: string, globalDirection?: string): Promise<SEOData> => {
     // Expert Persona Prompt
-    const systemInstruction = customInstruction?.trim() || DEFAULT_SEO_INSTRUCTION;
+    let systemInstruction = customInstruction?.trim() || DEFAULT_SEO_INSTRUCTION;
+
+    if (globalDirection?.trim()) {
+      systemInstruction += `\n\n--- GLOBAL DIRECTION ---\n${globalDirection}`;
+    }
 
     const prompt = `
     TASK: Maximize the reach of this video script through optimized metadata.

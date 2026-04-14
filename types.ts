@@ -96,7 +96,7 @@ export interface AIModel {
   type: "chat" | "image" | "audio" | "multimodal";
   power: "high" | "medium" | "low";
   speed: "fast" | "balanced" | "slow";
-  cost: "free" | "paid";
+  cost: "free" | "paid" | "unknown";
   capabilities: string[];
   labels: string[];
   score: number;

@@ -1,8 +1,10 @@
 
 import React, { useState, useCallback, useRef, useEffect } from 'react';
+import { AnimatePresence, motion } from 'motion/react';
 import { StepIndicator } from './components/StepIndicator';
 import { ConfirmModal } from './components/ConfirmModal';
 import { HelpModal } from './components/HelpModal';
+import { CoreAIFallbackPopup } from './components/CoreAIFallbackPopup';
 import { Step1Settings } from './components/steps/Step1Settings';
 import { Step2ScriptAudio } from './components/steps/Step2ScriptAudio';
 import { Step3Images } from './components/steps/Step3Images';
@@ -30,6 +32,7 @@ import {
 } from './services/geminiService';
 
 import { Sidebar } from './components/Sidebar';
+import { Footer } from './components/Footer';
 
 const wait = (ms: number) => new Promise(res => setTimeout(res, ms));
 
@@ -85,9 +88,26 @@ const App: React.FC = () => {
   }, [state]);
 
   const [currentProvider, setCurrentProvider] = useState(() => localStorage.getItem('storyboard_gamaxa_provider') || "google");
-  const [currentModel, setCurrentModel] = useState(() => localStorage.getItem('storyboard_gamaxa_model') || "gemini-2.0-flash");
+  const [currentModel, setCurrentModel] = useState(() => {
+    const saved = localStorage.getItem('storyboard_gamaxa_model');
+    if (saved === 'gemini-3-flash-preview') return 'gemini-2.5-flash';
+    return saved || "gemini-2.5-flash";
+  });
+
+  const [audioProvider, setAudioProvider] = useState(() => localStorage.getItem('storyboard_gamaxa_audio_provider') || "google");
+  const [audioModel, setAudioModel] = useState(() => localStorage.getItem('storyboard_gamaxa_audio_model') || "gemini-2.5-flash");
+
+  const [imageProvider, setImageProvider] = useState(() => localStorage.getItem('storyboard_gamaxa_image_provider') || "google");
+  const [imageModel, setImageModel] = useState(() => localStorage.getItem('storyboard_gamaxa_image_model') || "gemini-2.5-flash");
+
   const [isHelpOpen, setIsHelpOpen] = useState(false);
+  const [direction, setDirection] = useState(0); // 1 for forward, -1 for backward
   const [isAdvancedMode, setIsAdvancedMode] = useState(false);
+  const [fallbackState, setFallbackState] = useState<{
+    isOpen: boolean;
+    modelName: string;
+    onRetry: () => void;
+  }>({ isOpen: false, modelName: '', onRetry: () => {} });
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -99,12 +119,44 @@ const App: React.FC = () => {
     setActiveModel(currentModel, currentProvider);
   }, [currentModel, currentProvider]);
 
+  useEffect(() => {
+    localStorage.setItem('storyboard_gamaxa_audio_provider', audioProvider);
+  }, [audioProvider]);
+
+  useEffect(() => {
+    localStorage.setItem('storyboard_gamaxa_audio_model', audioModel);
+  }, [audioModel]);
+
+  useEffect(() => {
+    localStorage.setItem('storyboard_gamaxa_image_provider', imageProvider);
+  }, [imageProvider]);
+
+  useEffect(() => {
+    localStorage.setItem('storyboard_gamaxa_image_model', imageModel);
+  }, [imageModel]);
+
   const handleProviderChange = (providerId: string) => {
     setCurrentProvider(providerId);
   };
 
   const handleModelChange = (modelId: string) => {
     setCurrentModel(modelId);
+  };
+
+  const handleAudioProviderChange = (providerId: string) => {
+    setAudioProvider(providerId);
+  };
+
+  const handleAudioModelChange = (modelId: string) => {
+    setAudioModel(modelId);
+  };
+
+  const handleImageProviderChange = (providerId: string) => {
+    setImageProvider(providerId);
+  };
+
+  const handleImageModelChange = (modelId: string) => {
+    setImageModel(modelId);
   };
 
   // --- Actions ---
@@ -209,6 +261,8 @@ const App: React.FC = () => {
   };
 
   const handleStepClick = (targetStep: Step) => {
+    if (targetStep === state.currentStep) return;
+    setDirection(targetStep > state.currentStep ? 1 : -1);
     setState(prev => ({ ...prev, currentStep: targetStep }));
   };
 
@@ -280,6 +334,7 @@ const App: React.FC = () => {
   };
 
   const handleGoToAudio = () => {
+    setDirection(1);
     setState(prev => ({ ...prev, currentStep: Step.ScriptAudio }));
   };
 
@@ -296,6 +351,7 @@ const App: React.FC = () => {
   };
 
   const handleGoToImages = async () => {
+    setDirection(1);
     setState(prev => ({ ...prev, currentStep: Step.Images }));
   };
 
@@ -313,6 +369,7 @@ const App: React.FC = () => {
   };
 
   const handleGoToSEO = () => {
+    setDirection(1);
     setState(prev => ({ ...prev, currentStep: Step.SEO }));
   };
 
@@ -375,6 +432,16 @@ const App: React.FC = () => {
 
   return (
     <div className={`min-h-screen text-white flex flex-col items-center pt-3 pb-10 px-4 transition-colors duration-700 ${isAdvancedMode ? 'bg-[#1a1400]' : 'bg-[#0B0F19]'}`}>
+      {fallbackState.isOpen && (
+        <CoreAIFallbackPopup
+          modelName={fallbackState.modelName}
+          onConfirm={() => {
+            fallbackState.onRetry();
+            setFallbackState(prev => ({ ...prev, isOpen: false }));
+          }}
+          onCancel={() => setFallbackState(prev => ({ ...prev, isOpen: false }))}
+        />
+      )}
       <HelpModal isOpen={isHelpOpen} onClose={() => setIsHelpOpen(false)} />
       <div className="w-full max-w-6xl relative">
         
@@ -386,6 +453,14 @@ const App: React.FC = () => {
             currentModel={currentModel}
             onProviderChange={handleProviderChange}
             onModelChange={handleModelChange}
+            audioProvider={audioProvider}
+            audioModel={audioModel}
+            onAudioProviderChange={handleAudioProviderChange}
+            onAudioModelChange={handleAudioModelChange}
+            imageProvider={imageProvider}
+            imageModel={imageModel}
+            onImageProviderChange={handleImageProviderChange}
+            onImageModelChange={handleImageModelChange}
             onLocalExport={handleSaveLocalSession}
             onLocalImport={handleLoadLocalSessionClick}
             sessionManagerNode={
@@ -417,9 +492,9 @@ const App: React.FC = () => {
                 type="text"
                 value={state.sessionTitle}
                 onChange={(e) => setState(prev => ({ ...prev, sessionTitle: e.target.value }))}
-                placeholder={state.topic ? state.topic.substring(0, 30) + "..." : "Untitled Season"}
+                placeholder={state.topic ? state.topic.substring(0, 30) + "..." : "Untitled Session"}
                 className="bg-[#161b22]/80 border border-gray-700/50 rounded-lg px-3 py-1.5 text-sm text-center text-gray-300 focus:outline-none focus:border-indigo-500/50 focus:ring-1 focus:ring-indigo-500/50 transition-all w-64 placeholder-gray-600"
-                title="Season Title"
+                title="Session Title"
               />
               <button
                 onClick={() => setIsAdvancedMode(!isAdvancedMode)}
@@ -446,104 +521,122 @@ const App: React.FC = () => {
         />
 
         {/* Main Content Area */}
-        <div className={`border shadow-2xl rounded-2xl p-4 sm:p-6 md:p-8 min-h-[600px] relative overflow-hidden backdrop-blur-sm transition-all duration-500 ${isAdvancedMode ? 'bg-[#1a1400]/50 border-amber-900/30' : 'bg-[#111827]/50 border-gray-800'}`}>
-          <div className={`absolute top-0 left-0 w-full h-full pointer-events-none bg-gradient-to-b ${isAdvancedMode ? 'from-amber-500/5' : 'from-indigo-500/5'} to-transparent`} />
+        <div className={`border rounded-2xl p-4 sm:p-6 md:p-8 min-h-[600px] relative overflow-hidden backdrop-blur-sm transition-all duration-500 ${
+          isAdvancedMode 
+            ? 'bg-[#0b1625] border-amber-500/30 shadow-[0_20px_60px_rgba(0,0,0,0.6),0_0_40px_rgba(245,158,11,0.1)]' 
+            : 'bg-[#0b1625] border-gray-800 shadow-[0_20px_50px_rgba(0,0,0,0.5),0_0_30px_rgba(79,70,229,0.05)]'
+        } hover:shadow-2xl transition-all`}>
+          <div className={`absolute top-0 left-0 w-full h-full pointer-events-none bg-gradient-to-b ${isAdvancedMode ? 'from-amber-500/10' : 'from-indigo-500/10'} to-transparent`} />
 
-          {state.currentStep === Step.Settings && (
-            <Step1Settings 
-              script={state.scriptText}
-              onScriptChange={handleScriptChange}
-              analysis={state.scriptAnalysis}
-              onAnalyze={handleAnalyzeScript}
-              onImprove={handleImproveScript}
-              onGenerate={handleGenerateScript}
-              isAnalyzing={state.isAnalyzing}
-              isImproving={state.isImproving}
-              onNext={handleGoToAudio}
-              isAdvancedMode={isAdvancedMode}
-            />
-          )}
+          <AnimatePresence mode="wait" custom={direction}>
+            <motion.div
+              key={state.currentStep}
+              custom={direction}
+              initial={{ opacity: 0, x: direction * 50 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -direction * 50 }}
+              transition={{ duration: 0.4, ease: "easeInOut" }}
+              className="relative z-10"
+            >
+              {state.currentStep === Step.Settings && (
+                <Step1Settings 
+                  script={state.scriptText}
+                  onScriptChange={handleScriptChange}
+                  analysis={state.scriptAnalysis}
+                  onAnalyze={handleAnalyzeScript}
+                  onImprove={handleImproveScript}
+                  onGenerate={handleGenerateScript}
+                  isAnalyzing={state.isAnalyzing}
+                  isImproving={state.isImproving}
+                  onNext={handleGoToAudio}
+                  isAdvancedMode={isAdvancedMode}
+                />
+              )}
 
-          {state.currentStep === Step.ScriptAudio && (
-            <Step2ScriptAudio 
-              script={state.scriptText}
-              durationStr={state.scriptAnalysis?.estimatedDuration || "Unknown"}
-              settings={state.settings}
-              onScriptChange={handleScriptChange}
-              onRegenerateScript={() => handleStepClick(Step.Settings)} // Redirect to analysis
-              onGenerateAudio={handleGenerateAudio}
-              audioBase64={state.audioBase64}
-              isGeneratingAudio={state.isGeneratingAudio}
-              onNext={handleGoToImages}
-              isSegmenting={state.isSegmenting}
-              selectedVoiceName={state.selectedVoice}
-              title={state.topic}
-              musicPrompt={state.musicPrompt}
-              onMusicPromptChange={(p) => setState(prev => ({...prev, musicPrompt: p}))}
-              musicStyle={state.musicStyle}
-              onMusicStyleChange={(s) => setState(prev => ({...prev, musicStyle: s}))}
-              musicIntensity={state.musicIntensity}
-              onMusicIntensityChange={(i) => setState(prev => ({...prev, musicIntensity: i}))}
-              isGeneratingMusic={state.isGeneratingMusic}
-              isAdvancedMode={isAdvancedMode}
-              onGenerateMusicPrompt={async (isRegeneration, customInstruction) => {
-                setState(prev => ({ ...prev, isGeneratingMusic: true }));
-                try {
-                  const prompt = await generateMusicPrompt(state.scriptText, state.musicStyle, state.musicIntensity, isRegeneration, customInstruction);
-                  setState(prev => ({ ...prev, musicPrompt: prompt, isGeneratingMusic: false }));
-                } catch (e) {
-                  console.error("Failed to generate music prompt. Try again.");
-                  setState(prev => ({ ...prev, isGeneratingMusic: false }));
-                }
-              }}
-            />
-          )}
+              {state.currentStep === Step.ScriptAudio && (
+                <Step2ScriptAudio 
+                  script={state.scriptText}
+                  durationStr={state.scriptAnalysis?.estimatedDuration || "Unknown"}
+                  settings={state.settings}
+                  onScriptChange={handleScriptChange}
+                  onRegenerateScript={() => handleStepClick(Step.Settings)} // Redirect to analysis
+                  onGenerateAudio={handleGenerateAudio}
+                  audioBase64={state.audioBase64}
+                  isGeneratingAudio={state.isGeneratingAudio}
+                  onNext={handleGoToImages}
+                  isSegmenting={state.isSegmenting}
+                  selectedVoiceName={state.selectedVoice}
+                  title={state.topic}
+                  musicPrompt={state.musicPrompt}
+                  onMusicPromptChange={(p) => setState(prev => ({...prev, musicPrompt: p}))}
+                  musicStyle={state.musicStyle}
+                  onMusicStyleChange={(s) => setState(prev => ({...prev, musicStyle: s}))}
+                  musicIntensity={state.musicIntensity}
+                  onMusicIntensityChange={(i) => setState(prev => ({...prev, musicIntensity: i}))}
+                  isGeneratingMusic={state.isGeneratingMusic}
+                  isAdvancedMode={isAdvancedMode}
+                  onGenerateMusicPrompt={async (isRegeneration, customInstruction) => {
+                    setState(prev => ({ ...prev, isGeneratingMusic: true }));
+                    try {
+                      const prompt = await generateMusicPrompt(state.scriptText, state.musicStyle, state.musicIntensity, isRegeneration, customInstruction);
+                      setState(prev => ({ ...prev, musicPrompt: prompt, isGeneratingMusic: false }));
+                    } catch (e) {
+                      console.error("Failed to generate music prompt. Try again.");
+                      setState(prev => ({ ...prev, isGeneratingMusic: false }));
+                    }
+                  }}
+                />
+              )}
 
-          {state.currentStep === Step.Images && (
-            <Step3Images 
-              script={state.scriptText}
-              onScriptChange={handleScriptChange}
-              scenes={state.scenes}
-              onUpdateScenes={handleUpdateScenes}
-              onUpdateSingleScene={handleUpdateScenesSingle}
-              onNext={handleGoToSEO}
-              aiDirection={state.aiDirection}
-              onAiDirectionChange={(d) => setState(prev => ({...prev, aiDirection: d}))}
-              durationMode={state.durationMode}
-              onDurationModeChange={(m) => setState(prev => ({...prev, durationMode: m}))}
-              customDuration={state.customDuration}
-              onCustomDurationChange={(d) => setState(prev => ({...prev, customDuration: d}))}
-              isAdvancedModeGlobal={isAdvancedMode}
-            />
-          )}
+              {state.currentStep === Step.Images && (
+                <Step3Images 
+                  script={state.scriptText}
+                  onScriptChange={handleScriptChange}
+                  scenes={state.scenes}
+                  onUpdateScenes={handleUpdateScenes}
+                  onUpdateSingleScene={handleUpdateScenesSingle}
+                  onNext={handleGoToSEO}
+                  aiDirection={state.aiDirection}
+                  onAiDirectionChange={(d) => setState(prev => ({...prev, aiDirection: d}))}
+                  durationMode={state.durationMode}
+                  onDurationModeChange={(m) => setState(prev => ({...prev, durationMode: m}))}
+                  customDuration={state.customDuration}
+                  onCustomDurationChange={(d) => setState(prev => ({...prev, customDuration: d}))}
+                  isAdvancedModeGlobal={isAdvancedMode}
+                />
+              )}
 
-          {state.currentStep === Step.SEO && (
-            <Step4SEO 
-              seoData={state.seoData}
-              isGenerating={state.isGeneratingSEO}
-              onRestart={() => setIsConfirmingRestart(true)}
-              hasScript={!!state.scriptText}
-              title={state.topic}
-              script={state.scriptText}
-              isAdvancedMode={isAdvancedMode}
-              onGenerateSEO={async (customInstruction) => {
-                setState(prev => ({ ...prev, isGeneratingSEO: true }));
-                try {
-                  const data = await generateSEO(state.scriptText, state.settings.targetAudience, state.settings.tone, customInstruction);
-                  setState(prev => ({ ...prev, seoData: data, isGeneratingSEO: false }));
-                } catch (e) {
-                  console.error("Failed to generate SEO", e);
-                  setState(prev => ({ ...prev, isGeneratingSEO: false }));
-                }
-              }}
-            />
-          )}
+              {state.currentStep === Step.SEO && (
+                <Step4SEO 
+                  seoData={state.seoData}
+                  isGenerating={state.isGeneratingSEO}
+                  onRestart={() => setIsConfirmingRestart(true)}
+                  hasScript={!!state.scriptText}
+                  title={state.topic}
+                  script={state.scriptText}
+                  isAdvancedMode={isAdvancedMode}
+                  onGenerateSEO={async (customInstruction) => {
+                    setState(prev => ({ ...prev, isGeneratingSEO: true }));
+                    try {
+                      const data = await generateSEO(state.scriptText, state.settings.targetAudience, state.settings.tone, customInstruction);
+                      setState(prev => ({ ...prev, seoData: data, isGeneratingSEO: false }));
+                    } catch (e) {
+                      console.error("Failed to generate SEO", e);
+                      setState(prev => ({ ...prev, isGeneratingSEO: false }));
+                    }
+                  }}
+                />
+              )}
+            </motion.div>
+          </AnimatePresence>
         </div>
       </div>
       
+      <Footer />
+
       <ConfirmModal
         isOpen={isConfirmingRestart}
-        title="Start New Season"
+        title="Start New Session"
         message="Are you sure? This will clear all current progress."
         onConfirm={handleRestart}
         onCancel={() => setIsConfirmingRestart(false)}

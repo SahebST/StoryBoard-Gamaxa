@@ -22,6 +22,14 @@ service cloud.firestore {
     //   - instructions: string (required) - The custom AI instructions.
     //   - createdAt: string (required) - When the preset was created.
     //
+    // Collection: modelCache
+    // Document ID: {cacheId}
+    // Fields:
+    //   - uid: string (required) - The user ID of the owner.
+    //   - providerId: string (required) - The ID of the provider.
+    //   - models: string (required) - JSON stringified array of AIModel objects.
+    //   - updatedAt: string (required) - When the cache was last updated.
+    //
     // ===============================================================
 
     // ===============================================================
@@ -83,6 +91,15 @@ service cloud.firestore {
              request.resource.data.createdAt is string;
     }
 
+    function isValidModelCache() {
+      return hasRequiredFields(['uid', 'providerId', 'models', 'updatedAt']) &&
+             hasOnlyAllowedFields(['uid', 'providerId', 'models', 'updatedAt']) &&
+             request.resource.data.uid is string && request.resource.data.uid.size() > 0 &&
+             request.resource.data.providerId is string &&
+             request.resource.data.models is string && request.resource.data.models.size() <= 1000000 &&
+             request.resource.data.updatedAt is string;
+    }
+
     match /sessions/{sessionId} {
       allow read: if isDocOwner();
       allow create: if isAuthenticated() && isValidSession() && uidUnchanged();
@@ -94,6 +111,13 @@ service cloud.firestore {
       allow read: if isDocOwner();
       allow create: if isAuthenticated() && isValidPreset() && uidUnchanged();
       allow update: if isDocOwner() && isValidPreset() && uidNotModified();
+      allow delete: if isDocOwner();
+    }
+
+    match /modelCache/{cacheId} {
+      allow read: if isDocOwner();
+      allow create: if isAuthenticated() && isValidModelCache() && uidUnchanged();
+      allow update: if isDocOwner() && isValidModelCache() && uidNotModified();
       allow delete: if isDocOwner();
     }
   }

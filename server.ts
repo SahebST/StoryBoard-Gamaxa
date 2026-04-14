@@ -38,7 +38,11 @@ async function startServer() {
             provider: 'openrouter',
             context: m.context_length || 0,
             output: m.top_provider?.max_completion_tokens || 0,
-            pricing: m.pricing,
+            pricing: {
+              prompt: parseFloat(String(m.pricing?.prompt || "0")),
+              completion: parseFloat(String(m.pricing?.completion || "0")),
+              request: parseFloat(String(m.pricing?.request || "0"))
+            },
             architecture: m.architecture
           }));
           break;
@@ -120,10 +124,39 @@ async function startServer() {
         if (id.includes("flash") || id.includes("turbo") || id.includes("instant")) speed = "fast";
         else if (power === "high") speed = "slow";
 
-        // COST
-        let cost: "free" | "paid" = "paid";
-        if (m.provider === 'google') cost = "free";
-        if (m.pricing?.prompt === "0" || m.pricing?.input === 0) cost = "free";
+        // COST LOGIC (Fix Checklist Implementation)
+        let cost: "free" | "paid" | "unknown" = "unknown";
+        
+        if (m.provider === 'google' || m.provider === 'groq') {
+          // Google and Groq are always free in this context
+          cost = "free";
+        } else if (m.provider === 'openrouter') {
+          // OpenRouter logic: check ID for :free first
+          if (m.id.toLowerCase().includes(':free')) {
+            cost = "free";
+          } else if (m.pricing) {
+            // Use converted numeric pricing values
+            if (m.pricing.prompt === 0 && m.pricing.completion === 0 && m.pricing.request === 0) {
+              cost = "free";
+            } else {
+              cost = "paid";
+            }
+          } else {
+            cost = "paid"; // Default for OpenRouter if not explicitly free
+          }
+        } else if (m.provider === 'huggingface') {
+          // Hugging Face logic: pricing exists -> PAID, missing -> UNKNOWN
+          if (m.pricing || m.providers?.some((p: any) => p.pricing)) {
+            cost = "paid";
+          } else {
+            cost = "unknown";
+          }
+        } else if (m.pricing) {
+          // Generic fallback for other providers
+          const promptPrice = parseFloat(String(m.pricing.prompt || m.pricing.input || "0"));
+          if (promptPrice === 0) cost = "free";
+          else cost = "paid";
+        }
 
         // CAPABILITIES
         const capabilities: string[] = [];
@@ -137,7 +170,7 @@ async function startServer() {
         if (m.context >= 1000000) labels.push("ultra-context");
         else if (m.context >= 100000) labels.push("long-context");
         
-        labels.push(cost);
+        labels.push(cost.toUpperCase());
         labels.push(speed);
 
         if (capabilities.includes("long-context")) labels.push("best for long documents");

@@ -21,6 +21,22 @@
       ::-webkit-scrollbar-thumb:hover {
         background: #6b7280; 
       }
+
+      @keyframes shimmer {
+        0% { transform: translateX(-100%); }
+        100% { transform: translateX(100%); }
+      }
+      .animate-shimmer {
+        animation: shimmer 2s infinite;
+      }
+
+      @keyframes rotate-gradient {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+      }
+      .animate-rotate-gradient {
+        animation: rotate-gradient 3s linear infinite;
+      }
     </style>
   <script type="importmap">
 {

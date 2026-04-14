@@ -1,9 +1,11 @@
 
 import React, { useState, useEffect } from 'react';
+import { Loader2, Check, Wand2, Copy } from 'lucide-react';
 import { Scene } from '../../types';
-import { segmentScript, generateSceneImage, generateSystemInstruction } from '../../services/geminiService';
+import { segmentScript, generateSceneImage, generateSystemInstruction, analyzeScriptForVisuals } from '../../services/geminiService';
 import { Preset, savePresetToFirebase, listUserPresets, deletePresetFromFirebase } from '../../services/presetService';
 import { InstructionModal } from '../InstructionModal';
+import { VisualEngineControl, STAGES_CONFIG } from '../VisualEngineControl';
 
 interface Props {
   script: string;
@@ -160,10 +162,24 @@ const getBadgeColor = (type: string | undefined) => {
 
 // --- Sub Components ---
 
-const SectionHeader: React.FC<{ label: string; onClear?: () => void; onPaste?: () => void }> = ({ label, onClear, onPaste }) => (
+const SectionHeader: React.FC<{ 
+  label: string; 
+  onClear?: () => void; 
+  onPaste?: () => void;
+  status?: 'idle' | 'loading' | 'success' | 'error';
+  statusText?: string;
+}> = ({ label, onClear, onPaste, status = 'idle', statusText }) => (
   <div className="flex justify-between items-end mb-3">
-    <div className="text-[10px] font-bold tracking-widest text-gray-500 uppercase border-l-2 border-indigo-500 pl-2">
+    <div className={`text-[10px] font-bold tracking-widest uppercase border-l-2 pl-2 flex items-center gap-2 ${
+      status === 'loading' ? 'text-indigo-400 border-indigo-400' :
+      status === 'success' ? 'text-emerald-400 border-emerald-400' :
+      status === 'error' ? 'text-red-400 border-red-400' :
+      'text-gray-500 border-indigo-500'
+    }`}>
       {label}
+      {status === 'loading' && <Loader2 className="w-3 h-3 animate-spin" />}
+      {status === 'success' && <Check className="w-3 h-3" />}
+      {statusText && <span className="text-[8px] opacity-80 normal-case tracking-normal">({statusText})</span>}
     </div>
     <div className="flex gap-3">
         {onPaste && (
@@ -257,7 +273,9 @@ export const Step3Images: React.FC<Props> = ({
 
   // Configuration
   const [activeRatio, setActiveRatio] = useState("9:16");
-  const [activeAesthetic, setActiveAesthetic] = useState("Auto-select");
+  const [selectedAesthetics, setSelectedAesthetics] = useState<string[]>(["Auto-select"]);
+  const [isMultiSelect, setIsMultiSelect] = useState(false);
+  const [editableAestheticPrompt, setEditableAestheticPrompt] = useState("");
   const [customAesthetic, setCustomAesthetic] = useState("");
   const [activePacing, setActivePacing] = useState("Adaptive Flow (Auto)");
   
@@ -268,6 +286,42 @@ export const Step3Images: React.FC<Props> = ({
   const [isGeneratingPlan, setIsGeneratingPlan] = useState(false);
   const [generatingImageId, setGeneratingImageId] = useState<number | null>(null);
   const [isAutoGenerating, setIsAutoGenerating] = useState(false);
+  const [copiedId, setCopiedId] = useState<number | null>(null);
+
+  // AI Direction System
+  const [activeDirectionTab, setActiveDirectionTab] = useState<'ALL' | 'STAGE 1' | 'STAGE 2' | 'STAGE 3' | 'STAGE 4'>('ALL');
+  const [aiDirectionAll, setAiDirectionAll] = useState(aiDirection || "");
+  const [aiDirectionStages, setAiDirectionStages] = useState<Record<string, string>>({
+    'STAGE 1': "",
+    'STAGE 2': "",
+    'STAGE 3': "",
+    'STAGE 4': ""
+  });
+  const [defaultInstructions] = useState<Record<string, string>>(() => {
+    const defaults: Record<string, string> = {};
+    STAGES_CONFIG.forEach(s => {
+      defaults[s.name] = s.instruction;
+    });
+    return defaults;
+  });
+
+  // Sync aiDirectionAll with global aiDirection
+  useEffect(() => {
+    onAiDirectionChange(aiDirectionAll);
+  }, [aiDirectionAll]);
+
+  const handleDirectionChange = (val: string) => {
+    if (activeDirectionTab === 'ALL') {
+      setAiDirectionAll(val);
+    } else {
+      setAiDirectionStages(prev => ({
+        ...prev,
+        [activeDirectionTab]: val
+      }));
+    }
+  };
+
+  const currentDirectionValue = activeDirectionTab === 'ALL' ? aiDirectionAll : aiDirectionStages[activeDirectionTab];
 
   // Advanced Mode State
   const [isVisualModalOpen, setIsVisualModalOpen] = useState(false);
@@ -277,15 +331,81 @@ export const Step3Images: React.FC<Props> = ({
   const [presetName, setPresetName] = useState("");
   const [isSavingPreset, setIsSavingPreset] = useState(false);
 
+  // Script Analysis Trigger State
+  const [isAnalyzingScript, setIsAnalyzingScript] = useState(false);
+  const [analysisStatus, setAnalysisStatus] = useState<'idle' | 'success' | 'error'>('idle');
+  const [generatedStyles, setGeneratedStyles] = useState<{label: string, prompt: string, desc: string}[]>([]);
+  const [suggestedPresets, setSuggestedPresets] = useState<string[]>([]);
+
+  const handleAnalyzeScriptTrigger = async () => {
+    if (!localScript.trim()) return;
+    setIsAnalyzingScript(true);
+    setAnalysisStatus('idle');
+    try {
+      const availablePresets = AESTHETICS.map(a => a.label).filter(l => l !== 'Custom' && l !== 'Auto-select');
+      const result = await analyzeScriptForVisuals(localScript, availablePresets);
+      
+      const newStyles = result.styles_generated.map(s => ({
+        label: s,
+        prompt: `Visual Style: ${s}. MANDATORY VISUALS: Ensure the style strictly follows ${s}.`,
+        desc: 'AI Generated Style'
+      }));
+      
+      setGeneratedStyles(newStyles);
+      setSuggestedPresets(result.best_presets);
+      
+      // Update UI state
+      if (result.best_presets.length > 0) {
+        setSelectedAesthetics([result.best_presets[0]]);
+      }
+      if (result.estimated_duration_sec) {
+        onDurationModeChange('custom');
+        onCustomDurationChange(result.estimated_duration_sec.toString());
+      }
+      
+      setAnalysisStatus('success');
+    } catch (error) {
+      console.error("Script analysis failed:", error);
+      setAnalysisStatus('error');
+    } finally {
+      setIsAnalyzingScript(false);
+    }
+  };
+
+  const handleAestheticClick = (label: string) => {
+    if (isMultiSelect) {
+      setSelectedAesthetics(prev => {
+        if (prev.includes(label)) {
+          if (prev.length === 1) return prev; // Keep at least one
+          return prev.filter(l => l !== label);
+        }
+        return [...prev, label];
+      });
+    } else {
+      setSelectedAesthetics([label]);
+    }
+  };
+
   useEffect(() => {
     listUserPresets().then(setPresets).catch(console.error);
   }, []);
 
+  // Sync editable prompt when selection changes
+  useEffect(() => {
+    const allStyles = [...AESTHETICS, ...generatedStyles];
+    const prompts = selectedAesthetics.map(label => {
+      if (label === 'Custom') return `Visual Style: ${customAesthetic}`;
+      const style = allStyles.find(s => s.label === label);
+      return style ? style.prompt : label;
+    });
+    
+    // Combine prompts with a separator
+    setEditableAestheticPrompt(prompts.join(' | '));
+  }, [selectedAesthetics, customAesthetic, generatedStyles]);
+
   const handleToggleAdvancedMode = () => {
-    const selectedStyle = AESTHETICS.find(s => s.label === activeAesthetic);
-    const promptToUse = activeAesthetic === "Custom" ? `Visual Style: ${customAesthetic}` : (selectedStyle ? selectedStyle.prompt : activeAesthetic);
     const durationVal = (durationMode === 'custom' && customDuration) ? parseInt(customDuration, 10) : undefined;
-    const defaultInstruction = generateSystemInstruction(promptToUse, activePacing, generationType || 'visual', durationVal);
+    const defaultInstruction = generateSystemInstruction(editableAestheticPrompt, activePacing, generationType || 'visual', durationVal);
     setCustomSystemInstruction(defaultInstruction);
     setIsVisualModalOpen(true);
   };
@@ -334,7 +454,7 @@ export const Step3Images: React.FC<Props> = ({
   };
 
   const isConfigChanged = scenes.length > 0 && lastGeneratedConfig && (
-    lastGeneratedConfig.aesthetic !== activeAesthetic || 
+    lastGeneratedConfig.aesthetic !== selectedAesthetics.join(',') || 
     lastGeneratedConfig.pacing !== activePacing ||
     lastGeneratedConfig.duration !== (durationMode === 'custom' ? customDuration : 'auto') ||
     lastGeneratedConfig.aiDirection !== aiDirection
@@ -367,28 +487,26 @@ export const Step3Images: React.FC<Props> = ({
     onUpdateScenes([]); 
 
     try {
-      const selectedStyle = AESTHETICS.find(s => s.label === activeAesthetic);
-      const promptToUse = activeAesthetic === "Custom" ? `Visual Style: ${customAesthetic}` : (selectedStyle ? selectedStyle.prompt : activeAesthetic);
-      
       const durationVal = (durationMode === 'custom' && customDuration) ? parseInt(customDuration, 10) : undefined;
 
       // Pass aiDirection to service
       const newScenes = await segmentScript(
         localScript, 
-        promptToUse, 
+        editableAestheticPrompt, 
         activePacing, 
         type, 
         durationVal, 
-        aiDirection,
-        isAdvancedModeGlobal ? customSystemInstruction : undefined
+        aiDirectionAll,
+        isAdvancedModeGlobal ? customSystemInstruction : undefined,
+        aiDirectionStages['STAGE 1']
       );
       
       onUpdateScenes(newScenes);
       setLastGeneratedConfig({ 
-        aesthetic: activeAesthetic, 
+        aesthetic: selectedAesthetics.join(','), 
         pacing: activePacing,
         duration: durationMode === 'custom' ? customDuration : 'auto',
-        aiDirection: aiDirection
+        aiDirection: aiDirectionAll
       });
       
     } catch (e: any) {
@@ -475,6 +593,15 @@ export const Step3Images: React.FC<Props> = ({
     });
   };
 
+  const handleCopyAll = (scene: Scene) => {
+    const imgPrompt = scene.imagePrompt || "";
+    const vidPrompt = scene.imageToVideoPrompt || scene.textToVideoPrompt || "";
+    const text = `Image prompt :\n${imgPrompt}\nImage video prompt :\n${vidPrompt}`;
+    navigator.clipboard.writeText(text);
+    setCopiedId(scene.id);
+    setTimeout(() => setCopiedId(null), 2000);
+  };
+
   const completedCount = scenes.filter(s => s.imageUrl).length;
   // All complete if we have images for all scenes OR if we are in T2V mode (no images to generate)
   const isAllComplete = scenes.length > 0 && (generationType === 't2v' || completedCount === scenes.length);
@@ -482,7 +609,7 @@ export const Step3Images: React.FC<Props> = ({
   const isPlanReady = scenes.length > 0;
   const progressPercent = isPlanReady && generationType === 'visual' ? Math.round((completedCount / scenes.length) * 100) : 0;
   
-  const currentAestheticDesc = AESTHETICS.find(a => a.label === activeAesthetic)?.desc;
+  const currentAestheticDesc = [...AESTHETICS, ...generatedStyles].find(a => selectedAesthetics.includes(a.label))?.desc;
 
   return (
     <div className="space-y-12 animate-fade-in pb-24">
@@ -497,6 +624,33 @@ export const Step3Images: React.FC<Props> = ({
               className="w-full h-64 bg-transparent p-5 text-sm text-gray-300 font-serif leading-relaxed resize-none focus:outline-none custom-scrollbar z-10 relative"
               placeholder="Paste your script here or edit the existing one..."
             />
+         </div>
+         
+         {/* Script Analysis Trigger */}
+         <div className="mt-3 flex justify-end">
+            <button
+              onClick={handleAnalyzeScriptTrigger}
+              disabled={isAnalyzingScript || !localScript.trim()}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all ${
+                isAnalyzingScript 
+                  ? 'bg-indigo-500/20 text-indigo-400 border border-indigo-500/50' 
+                  : analysisStatus === 'success'
+                    ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/50'
+                    : analysisStatus === 'error'
+                      ? 'bg-red-500/20 text-red-400 border border-red-500/50'
+                      : 'bg-[#161b22] text-gray-400 border border-gray-800 hover:border-indigo-500/50 hover:text-indigo-400'
+              }`}
+            >
+              {isAnalyzingScript ? (
+                <><Loader2 className="w-4 h-4 animate-spin" /> Analyzing Script...</>
+              ) : analysisStatus === 'success' ? (
+                <><Check className="w-4 h-4" /> Analysis Complete</>
+              ) : analysisStatus === 'error' ? (
+                <><Wand2 className="w-4 h-4" /> Analysis Failed - Retry</>
+              ) : (
+                <><Wand2 className="w-4 h-4" /> Auto-Configure from Script</>
+              )}
+            </button>
          </div>
       </div>
 
@@ -521,41 +675,76 @@ export const Step3Images: React.FC<Props> = ({
 
         {/* Aesthetics (Grid) */}
         <div>
-          <SectionHeader label="03 — Aesthetics" />
+          <div className="flex justify-between items-center mb-3">
+            <SectionHeader 
+              label="03 — Aesthetics" 
+              status={isAnalyzingScript ? 'loading' : analysisStatus === 'success' ? 'success' : analysisStatus === 'error' ? 'error' : 'idle'}
+              statusText={isAnalyzingScript ? 'Analyzing...' : analysisStatus === 'success' ? 'Success' : analysisStatus === 'error' ? 'Failed' : undefined}
+            />
+            <button 
+              onClick={() => setIsMultiSelect(!isMultiSelect)}
+              className={`text-[9px] font-bold uppercase tracking-wider px-2 py-1 rounded border transition-all ${isMultiSelect ? 'bg-indigo-600 border-indigo-500 text-white' : 'bg-transparent border-gray-700 text-gray-500 hover:text-gray-300'}`}
+            >
+              {isMultiSelect ? 'Multi-Select: ON' : 'Multi-Select: OFF'}
+            </button>
+          </div>
+          
           <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-1.5 mb-3">
-            {AESTHETICS.map(style => (
+            {[...AESTHETICS, ...generatedStyles].map(style => (
               <button
                 key={style.label}
-                onClick={() => setActiveAesthetic(style.label)}
+                onClick={() => handleAestheticClick(style.label)}
                 className={`
                    py-2 px-1 rounded-lg text-[9px] font-bold uppercase tracking-wide border transition-all relative flex flex-col items-center justify-center text-center h-full min-h-[44px]
-                   ${activeAesthetic === style.label 
+                   ${selectedAesthetics.includes(style.label)
                      ? 'bg-indigo-900/40 border-indigo-500 text-indigo-200 shadow-md' 
-                     : 'bg-[#161b22] border-gray-800 text-gray-500 hover:border-gray-600 hover:text-gray-300'}
+                     : suggestedPresets.includes(style.label)
+                       ? 'bg-emerald-900/20 border-emerald-500/50 text-emerald-400 hover:border-emerald-400'
+                       : generatedStyles.some(s => s.label === style.label)
+                         ? 'bg-purple-900/20 border-purple-500/50 text-purple-400 hover:border-purple-400'
+                         : 'bg-[#161b22] border-gray-800 text-gray-500 hover:border-gray-600 hover:text-gray-300'}
                 `}
               >
-                {activeAesthetic === style.label && <span className="absolute top-1 right-1 w-1 h-1 bg-indigo-400 rounded-full"></span>}
+                {selectedAesthetics.includes(style.label) && <span className="absolute top-1 right-1 w-1 h-1 bg-indigo-400 rounded-full"></span>}
+                {suggestedPresets.includes(style.label) && !selectedAesthetics.includes(style.label) && <span className="absolute top-1 right-1 w-1 h-1 bg-emerald-400 rounded-full"></span>}
+                {generatedStyles.some(s => s.label === style.label) && !selectedAesthetics.includes(style.label) && <span className="absolute top-1 right-1 w-1 h-1 bg-purple-400 rounded-full"></span>}
                 <span className="leading-tight">{style.label}</span>
               </button>
             ))}
           </div>
           
-          {activeAesthetic === 'Custom' ? (
-            <input 
-              type="text"
-              value={customAesthetic}
-              onChange={(e) => setCustomAesthetic(e.target.value)}
-              placeholder="Describe your custom visual style..."
-              className="w-full bg-[#0f1218] border border-gray-700 text-gray-200 text-sm rounded-lg p-3 focus:border-indigo-500 focus:outline-none placeholder-gray-600"
-            />
-          ) : currentAestheticDesc && (
-            <div className="mt-2 p-2.5 rounded-lg bg-[#0f1218] border border-gray-800/50 flex items-start gap-3">
-              <div className="mt-1 w-1 h-1 rounded-full bg-indigo-500 shrink-0"></div>
-              <p className="text-[10px] text-gray-400 leading-relaxed">
-                <strong className="text-indigo-400">Effect:</strong> {currentAestheticDesc}
-              </p>
+          {selectedAesthetics.includes('Custom') && (
+            <div className="mb-3">
+              <input 
+                type="text"
+                value={customAesthetic}
+                onChange={(e) => setCustomAesthetic(e.target.value)}
+                placeholder="Describe your custom visual style..."
+                className="w-full bg-[#0f1218] border border-gray-700 text-gray-200 text-sm rounded-lg p-3 focus:border-indigo-500 focus:outline-none placeholder-gray-600"
+              />
             </div>
           )}
+
+          <div className="mt-2 p-3 rounded-lg bg-[#0f1218] border border-gray-800/50">
+            <div className="flex justify-between items-center mb-2">
+              <div className="flex items-center gap-2">
+                <div className="w-1 h-1 rounded-full bg-indigo-500"></div>
+                <span className="text-[10px] font-bold uppercase tracking-widest text-indigo-400">Visual Prompt (Editable)</span>
+              </div>
+              <span className="text-[8px] text-gray-600 uppercase">AI will use this exact text</span>
+            </div>
+            <textarea
+              value={editableAestheticPrompt}
+              onChange={(e) => setEditableAestheticPrompt(e.target.value)}
+              className="w-full bg-[#161b22] border border-gray-800 rounded-lg p-3 text-[11px] text-gray-300 font-mono leading-relaxed resize-none h-24 focus:outline-none focus:ring-1 focus:ring-indigo-500/50"
+              placeholder="The combined visual prompt will appear here..."
+            />
+            {currentAestheticDesc && !isMultiSelect && (
+              <p className="mt-2 text-[9px] text-gray-500 italic">
+                Note: {currentAestheticDesc}
+              </p>
+            )}
+          </div>
         </div>
 
         {/* Pacing (Row) */}
@@ -581,7 +770,11 @@ export const Step3Images: React.FC<Props> = ({
 
         {/* Duration (Row) */}
         <div>
-            <SectionHeader label="05 — Script Duration" />
+            <SectionHeader 
+              label="05 — Script Duration" 
+              status={isAnalyzingScript ? 'loading' : analysisStatus === 'success' ? 'success' : analysisStatus === 'error' ? 'error' : 'idle'}
+              statusText={isAnalyzingScript ? 'Estimating...' : analysisStatus === 'success' ? 'Success' : analysisStatus === 'error' ? 'Failed' : undefined}
+            />
             <div className="flex flex-col md:flex-row gap-4">
                 <button
                     onClick={() => onDurationModeChange('auto')}
@@ -612,105 +805,85 @@ export const Step3Images: React.FC<Props> = ({
 
         {/* AI Direction & Advanced Control (Row) */}
         <div>
-           <div className="flex justify-between items-end mb-3">
+           <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 gap-4">
              <div className="text-[10px] font-bold tracking-widest text-gray-500 uppercase border-l-2 border-indigo-500 pl-2">
                06 — AI Direction
              </div>
+             
+             <div className="flex bg-[#161b22] p-1 rounded-xl border border-gray-800">
+               {(['ALL', 'STAGE 1', 'STAGE 2', 'STAGE 3', 'STAGE 4'] as const).map((tab) => (
+                 <button
+                   key={tab}
+                   onClick={() => setActiveDirectionTab(tab)}
+                   className={`px-3 py-1.5 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all ${
+                     activeDirectionTab === tab 
+                       ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/20' 
+                       : 'text-gray-500 hover:text-gray-300'
+                   }`}
+                 >
+                   {tab}
+                 </button>
+               ))}
+             </div>
            </div>
            
-           <div className="bg-[#161b22] border border-gray-800 rounded-xl p-4 focus-within:ring-1 focus-within:ring-indigo-500/50 transition-all">
-               <textarea
-                   value={aiDirection}
-                   onChange={(e) => onAiDirectionChange(e.target.value)}
-                   placeholder="Optional: Provide specific visual instructions (e.g. 'Dark and moody lighting', 'Use a specific color palette', 'Focus on character expressions')..."
-                   className="w-full bg-transparent text-sm text-gray-300 focus:outline-none resize-none h-20 placeholder-gray-600 custom-scrollbar"
-               />
+           <div className="space-y-3">
+             {/* Backbone Display (Read-only) */}
+             {activeDirectionTab !== 'ALL' && (
+               <div className="bg-indigo-500/5 border border-indigo-500/20 rounded-xl p-3">
+                 <div className="flex items-center gap-2 mb-1">
+                   <div className="w-1 h-1 rounded-full bg-indigo-400"></div>
+                   <span className="text-[8px] font-bold uppercase tracking-widest text-indigo-400/70">Default Backbone (Mandatory)</span>
+                 </div>
+                 <p className="text-[10px] text-gray-400 italic leading-relaxed">
+                   {defaultInstructions[activeDirectionTab]}
+                 </p>
+               </div>
+             )}
+
+             <div className="bg-[#161b22] border border-gray-800 rounded-xl p-4 focus-within:ring-1 focus-within:ring-indigo-500/50 transition-all">
+                 <div className="flex justify-between items-center mb-2">
+                   <span className="text-[9px] font-bold text-gray-500 uppercase tracking-widest">
+                     {activeDirectionTab === 'ALL' ? 'Global Direction' : `${activeDirectionTab} Override`}
+                   </span>
+                   {currentDirectionValue && (
+                     <span className="text-[8px] text-emerald-500 font-bold uppercase">Active</span>
+                   )}
+                 </div>
+                 <textarea
+                     value={currentDirectionValue}
+                     onChange={(e) => handleDirectionChange(e.target.value)}
+                     placeholder={activeDirectionTab === 'ALL' 
+                       ? "Global instructions for all stages..." 
+                       : `Specific instructions for ${activeDirectionTab}...`}
+                     className="w-full bg-transparent text-sm text-gray-300 focus:outline-none resize-none h-24 placeholder-gray-600 custom-scrollbar"
+                 />
+             </div>
+             
+             <div className="flex items-center gap-2 px-2">
+               <div className="w-1 h-1 rounded-full bg-gray-700"></div>
+               <p className="text-[9px] text-gray-600 uppercase tracking-tight">
+                 Priority: Default → ALL → Stage Direction (Overrides ALL)
+               </p>
+             </div>
            </div>
         </div>
 
       </div>
 
-      {/* GENERATE PLAN ACTION */}
-      <div className="pt-6 space-y-3">
-        <div className="flex gap-3">
-            {isPlanReady && (
-            <button
-                onClick={handleClearScenes}
-                className="bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white px-6 py-4 rounded-xl font-bold text-xs uppercase tracking-widest transition-all"
-            >
-                Clear
-            </button>
-            )}
-            
-            {/* Main Visual Plan Button */}
-            <button
-                onClick={() => handleGeneratePlan('visual', 'standard')}
-                disabled={isGeneratingPlan || !localScript.trim()}
-                className={`flex-1 py-5 font-bold uppercase tracking-widest rounded-xl shadow-lg transition-all disabled:opacity-50 flex items-center justify-center gap-3
-                    ${isConfigChanged 
-                        ? 'bg-amber-600 hover:bg-amber-500 text-white shadow-amber-900/20 ring-2 ring-amber-400/50' 
-                        : 'bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white shadow-indigo-900/20'
-                    }
-                `}
-            >
-                {isGeneratingPlan && generationType === 'visual' ? (
-                    <>
-                        <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-                        {isConfigChanged ? 'Updating Plan...' : 'Creating Visual Plan...'}
-                    </>
-                ) : isConfigChanged ? (
-                    <>
-                       <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
-                       Update Visual Plan
-                    </>
-                ) : isPlanReady && generationType === 'visual' ? (
-                    "Regenerate Visual Plan" 
-                ) : (
-                    "Generate Visual Plan →"
-                )}
-            </button>
-        </div>
-
-        <div className="grid grid-cols-2 gap-3">
-            {/* Generate Visual Prompts Only */}
-            <button
-            onClick={() => handleGeneratePlan('visual', 'prompts')}
-            disabled={isGeneratingPlan || !localScript.trim()}
-            className="w-full py-4 bg-[#1F2937] hover:bg-gray-700 border border-gray-600 text-gray-300 hover:text-white font-bold uppercase tracking-widest rounded-xl shadow-lg transition-all disabled:opacity-50 flex items-center justify-center gap-2"
-            >
-            {isGeneratingPlan && generationType === 'visual' && viewMode === 'prompts' ? (
-                <>
-                    <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-                    Generating...
-                </>
-            ) : (
-                <>
-                    <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-                    Visual Prompts (Text)
-                </>
-            )}
-            </button>
-
-            {/* Generate Text-to-Video Prompts Only */}
-            <button
-            onClick={() => handleGeneratePlan('t2v', 'prompts')}
-            disabled={isGeneratingPlan || !localScript.trim()}
-            className="w-full py-4 bg-[#1F2937] hover:bg-indigo-900/30 border border-gray-600 hover:border-indigo-500/50 text-indigo-300 hover:text-white font-bold uppercase tracking-widest rounded-xl shadow-lg transition-all disabled:opacity-50 flex items-center justify-center gap-2"
-            >
-            {isGeneratingPlan && generationType === 't2v' ? (
-                <>
-                    <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-                    Generating T2V...
-                </>
-            ) : (
-                <>
-                    <svg className="w-4 h-4 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 4v16M17 4v16M3 8h4m10 0h4M3 12h18M3 16h4m10 0h4M4 20h16a1 1 0 001-1V5a1 1 0 00-1-1H4a1 1 0 00-1 1v14a1 1 0 001 1z" /></svg>
-                    Text-to-Video Prompts
-                </>
-            )}
-            </button>
-        </div>
-      </div>
+      {/* VISUAL ENGINE CONTROL */}
+      <VisualEngineControl 
+        script={localScript}
+        aiDirection={aiDirectionAll}
+        aiDirectionStages={aiDirectionStages}
+        aesthetic={selectedAesthetics.join(', ')}
+        pacing={activePacing}
+        duration={durationMode === 'custom' ? customDuration : 'auto'}
+        canvasSize={activeRatio}
+        generationMode={generationType || 'visual'}
+        scenes={scenes}
+        onUpdateScenes={onUpdateScenes}
+      />
 
       {/* STORYBOARD */}
       {isPlanReady && (
@@ -828,8 +1001,20 @@ export const Step3Images: React.FC<Props> = ({
                  const timeRange = `${Math.floor(startTime/60)}:${(startTime%60).toString().padStart(2,'0')} - ${Math.floor(endTime/60)}:${(endTime%60).toString().padStart(2,'0')}`;
                  
                  return (
-                   <div key={scene.id} className={`bg-[#111827] border border-gray-800 rounded-2xl overflow-hidden shadow-lg flex flex-col group hover:border-gray-700 transition-all ${viewMode === 'standard' ? 'lg:flex-row' : ''}`}>
-                      
+                   <div key={scene.id} className={`bg-[#111827] border border-gray-800 rounded-2xl overflow-hidden shadow-lg flex flex-col group hover:border-gray-700 transition-all relative ${viewMode === 'standard' ? 'lg:flex-row' : ''}`}>
+                      {/* Copy All Button */}
+                      <button 
+                        onClick={() => handleCopyAll(scene)}
+                        className="absolute top-4 right-4 z-40 p-2 bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-500/20 rounded-lg text-indigo-400 hover:text-indigo-300 transition-all shadow-sm group/copy"
+                        title="Copy both Image and Video prompts"
+                      >
+                        {copiedId === scene.id ? (
+                          <Check className="w-4 h-4" />
+                        ) : (
+                          <Copy className="w-4 h-4" />
+                        )}
+                      </button>
+
                       {/* Left: Info Panel (Script & Prompt) */}
                       <div className={`p-4 sm:p-6 flex flex-col justify-between border-b lg:border-b-0 bg-[#161b22]/50 relative ${viewMode === 'standard' ? 'lg:w-5/12 lg:border-r border-gray-800' : 'w-full'}`}>
                          <div>
@@ -859,7 +1044,7 @@ export const Step3Images: React.FC<Props> = ({
                                   <h4 className="text-[9px] font-bold text-gray-500 uppercase tracking-wider mb-1">Core Concept</h4>
                                   <input
                                       type="text"
-                                      value={scene.visualIntent}
+                                      value={scene.visualIntent || ""}
                                       onChange={(e) => onUpdateSingleScene({...scene, visualIntent: e.target.value.toUpperCase()})}
                                       className="w-full bg-transparent text-sm font-bold text-white focus:outline-none border-b border-gray-800 focus:border-indigo-500 transition-colors"
                                   />
@@ -1061,7 +1246,7 @@ export const Step3Images: React.FC<Props> = ({
                  className={`
                    px-10 py-4 rounded-xl font-bold text-sm tracking-wide transition-all shadow-xl
                    ${(viewMode === 'prompts' || allImagesReady)
-                     ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white hover:shadow-indigo-900/40 hover:scale-105' 
+                     ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white hover:shadow-indigo-500/50 hover:shadow-[0_0_20px_rgba(99,102,241,0.4)] hover:scale-105 border border-indigo-400/30' 
                      : 'bg-gray-800 text-gray-500 cursor-not-allowed opacity-50'}
                  `}
               >
@@ -1079,7 +1264,7 @@ export const Step3Images: React.FC<Props> = ({
         instruction={customSystemInstruction}
         onInstructionChange={setCustomSystemInstruction}
         defaultInstruction={generateSystemInstruction(
-          AESTHETICS.find(s => s.label === activeAesthetic)?.prompt || activeAesthetic,
+          editableAestheticPrompt,
           activePacing,
           generationType || 'visual',
           (durationMode === 'custom' && customDuration) ? parseInt(customDuration, 10) : undefined

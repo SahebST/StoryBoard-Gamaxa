@@ -10,7 +10,6 @@ interface VisualEngineControlProps {
   pacing: string;
   duration: string;
   canvasSize: string;
-  generationMode: 'visual' | 't2v';
   scenes: Scene[];
   onUpdateScenes: (scenes: Scene[]) => void;
 }
@@ -61,7 +60,7 @@ The model must convert each image prompt into a controlled motion prompt for ima
 Motion must be derived from the existing image: small actions like hand movement, screen changes, fluid motion, environmental shifts. Avoid chaos, fast cuts, or unrealistic transitions. The motion must feel physically believable and stable.
 Each prompt must include clear temporal behavior (~2–4 seconds) and describe how the scene evolves. Movement must support the idea, not distract from it. Avoid adding new objects, characters, or environments.
 Continuity must be preserved across segments. The model must ensure that motion logically follows previous states.
-OUTPUT FORMAT: Update the input JSON array by adding { textToVideoPrompt, imageToVideoPrompt } to each segment.`,
+OUTPUT FORMAT: Update the input JSON array by adding { imageToVideoPrompt } to each segment.`,
   }
 ];
 
@@ -73,7 +72,6 @@ export const VisualEngineControl: React.FC<VisualEngineControlProps> = ({
   pacing,
   duration,
   canvasSize,
-  generationMode,
   scenes,
   onUpdateScenes
 }) => {
@@ -107,7 +105,6 @@ export const VisualEngineControl: React.FC<VisualEngineControlProps> = ({
     instruction += `- Pacing: ${pacing}\n`;
     instruction += `- Script Duration: ${duration}s\n`;
     instruction += `- Canvas Size: ${canvasSize}\n`;
-    instruction += `- Generation Mode: ${generationMode === 't2v' ? 'Video' : 'Image'}\n`;
     
     instruction += `\nIMPORTANT: Return ONLY valid JSON. The output must be an array of scene objects.`;
     

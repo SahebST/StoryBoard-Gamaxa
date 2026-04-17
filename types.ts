@@ -29,11 +29,10 @@ export interface Scene {
   text: string;
   duration: number; // approximate duration in seconds
   visualIntent: string; // Core Concept / Subject Focus
-  imagePrompt?: string; // The exact prompt for the image generator (Optional in T2V mode)
+  imagePrompt?: string; // The exact prompt for the image generator
   imageUrl?: string;
   isGeneratingImage?: boolean;
   imageToVideoPrompt?: string; // Prompt for image-to-video generation
-  textToVideoPrompt?: string; // Prompt for text-to-video generation
   
   // New Visual Architect Fields
   classification?: "Structure" | "Process" | "Comparison" | "Abstract" | string;

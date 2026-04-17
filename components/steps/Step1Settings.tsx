@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { ScriptAnalysis } from '../../types';
-import { generateViralHooks, DEFAULT_SCRIPT_INSTRUCTION, DEFAULT_ANALYZE_INSTRUCTION, DEFAULT_HOOK_INSTRUCTION } from '../../services/geminiService';
-import { TONES } from '../../constants';
+import { DEFAULT_SCRIPT_INSTRUCTION, DEFAULT_ANALYZE_INSTRUCTION } from '../../services/geminiService';
 import { InstructionModal } from '../InstructionModal';
 
 interface Props {
@@ -27,39 +26,20 @@ export const Step1Settings: React.FC<Props> = ({
   script, onScriptChange, analysis, onAnalyze, onImprove, onGenerate, isAnalyzing, isImproving, onNext, isAdvancedMode
 }) => {
   const [topic, setTopic] = useState("");
-  const [selectedTone, setSelectedTone] = useState(TONES[0]);
-  const [hookTopic, setHookTopic] = useState("");
-  const [generatedHooks, setGeneratedHooks] = useState<string[]>([]);
-  const [isGeneratingHooks, setIsGeneratingHooks] = useState(false);
 
   // Advanced Mode States
   const [customScriptInstruction, setCustomScriptInstruction] = useState(DEFAULT_SCRIPT_INSTRUCTION);
   const [customAnalyzeInstruction, setCustomAnalyzeInstruction] = useState(DEFAULT_ANALYZE_INSTRUCTION);
-  const [customHookInstruction, setCustomHookInstruction] = useState(DEFAULT_HOOK_INSTRUCTION);
   
   const [isScriptModalOpen, setIsScriptModalOpen] = useState(false);
   const [isAnalyzeModalOpen, setIsAnalyzeModalOpen] = useState(false);
-  const [isHookModalOpen, setIsHookModalOpen] = useState(false);
 
   // If script is empty, we show Generation Mode. If script exists, we show Editor/Analysis mode.
   const isEditorMode = script && script.length > 10;
 
   const handleGenerateClick = () => {
     if(!topic.trim()) return;
-    onGenerate(topic, selectedTone, isAdvancedMode ? customScriptInstruction : undefined);
-  };
-
-  const handleGenerateHooks = async () => {
-    if (!hookTopic.trim()) return;
-    setIsGeneratingHooks(true);
-    try {
-      const hooks = await generateViralHooks(hookTopic, isAdvancedMode ? customHookInstruction : undefined);
-      setGeneratedHooks(hooks);
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setIsGeneratingHooks(false);
-    }
+    onGenerate(topic, "Dramatic", isAdvancedMode ? customScriptInstruction : undefined); // Default tone since selector is removed
   };
 
   const handlePaste = async () => {
@@ -121,35 +101,23 @@ export const Step1Settings: React.FC<Props> = ({
                       value={topic}
                       onChange={(e) => setTopic(e.target.value)}
                       placeholder="e.g. The mysterious disappearance of Flight 19..."
-                      className="w-full bg-[#0d1117] border border-gray-700 text-white rounded-lg p-4 text-sm focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/50 transition-all placeholder-gray-600"
+                      className="w-full bg-[#0d1117] border border-gray-700 text-white rounded-lg p-4 text-sm focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/50 transition-all placeholder-gray-600 mb-4"
                       onKeyDown={(e) => e.key === 'Enter' && handleGenerateClick()}
                    />
                 </div>
                 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                   <div>
-                      <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2">Narrative Tone</label>
-                      <select 
-                         value={selectedTone}
-                         onChange={(e) => setSelectedTone(e.target.value)}
-                         className="w-full bg-[#0d1117] border border-gray-700 text-white rounded-lg p-3 text-sm focus:outline-none focus:border-indigo-500"
-                      >
-                         {TONES.map(t => <option key={t} value={t}>{t}</option>)}
-                      </select>
-                   </div>
-                   <div className="flex items-end">
-                      <button 
-                        onClick={handleGenerateClick}
-                        disabled={!topic.trim() || isAnalyzing}
-                        className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold p-3 rounded-lg shadow-lg shadow-indigo-900/20 hover:shadow-indigo-500/40 hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        {isAnalyzing ? (
-                           <><svg className="animate-spin h-4 w-4" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Writing Script...</>
-                        ) : (
-                           <>Generate Story <MagicWand /></>
-                        )}
-                      </button>
-                   </div>
+                <div className="flex items-end">
+                   <button 
+                     onClick={handleGenerateClick}
+                     disabled={!topic.trim() || isAnalyzing}
+                     className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold p-3 rounded-lg shadow-lg shadow-indigo-900/20 hover:shadow-indigo-500/40 hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                   >
+                     {isAnalyzing ? (
+                        <><svg className="animate-spin h-4 w-4" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Writing Script...</>
+                     ) : (
+                        <>Generate Story <MagicWand /></>
+                     )}
+                   </button>
                 </div>
                 <p className="text-[10px] text-gray-500 text-center pt-2">
                    The AI will generate a 3rd-person narrative script tailored for short-form video.
@@ -225,57 +193,13 @@ export const Step1Settings: React.FC<Props> = ({
                  {isAnalyzing ? "Re-Analyzing..." : "Re-Analyze"}
                </button>
                
-               <button
+                <button
                   onClick={onNext}
                   className="px-8 py-3 bg-green-600 hover:bg-green-500 text-white font-bold text-xs uppercase tracking-wider rounded-xl shadow-lg shadow-green-900/40 hover:shadow-green-500/50 transition-all flex items-center gap-2 active:scale-95 border border-green-400/30"
                 >
                   Proceed to Audio &rarr;
                 </button>
             </div>
-            
-            {/* Viral Hook Lab (Bottom Left) */}
-            <div className="mt-2 border-t border-gray-800 pt-4">
-              <div className="flex items-center gap-2 mb-3">
-                <span className="text-pink-400 font-bold text-xs uppercase tracking-wider">⚡ VIRAL HOOK LAB</span>
-                {isAdvancedMode && (
-                  <button 
-                    onClick={() => setIsHookModalOpen(true)} 
-                    className="text-amber-500 hover:text-amber-400 p-1 rounded hover:bg-amber-500/10 transition-colors" 
-                    title="Edit AI Instructions"
-                  >
-                    <GearIcon />
-                  </button>
-                )}
-              </div>
-              <div className="flex gap-2 mb-3">
-                  <input 
-                    type="text" 
-                    value={hookTopic} 
-                    onChange={e => setHookTopic(e.target.value)}
-                    placeholder="Topic for hooks..."
-                    className="flex-1 bg-[#0d1117] border border-gray-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-pink-500"
-                  />
-                  <button 
-                    onClick={handleGenerateHooks}
-                    disabled={isGeneratingHooks}
-                    className="bg-pink-600 hover:bg-pink-500 text-white px-3 py-2 rounded-lg text-xs font-bold uppercase disabled:opacity-50 min-w-[90px] flex items-center justify-center"
-                  >
-                    {isGeneratingHooks ? (
-                      <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-                    ) : "GENERATE"}
-                  </button>
-              </div>
-              {generatedHooks.length > 0 && (
-                <div className="space-y-2">
-                    {generatedHooks.map((hook, i) => (
-                      <div key={i} onClick={() => navigator.clipboard.writeText(hook)} className="bg-[#1F2937] p-2 rounded border border-gray-700 text-xs text-gray-300 hover:text-white cursor-pointer hover:border-pink-500/50 transition-all">
-                        "{hook}"
-                      </div>
-                    ))}
-                </div>
-              )}
-            </div>
-
           </div>
         )}
 
@@ -432,14 +356,6 @@ export const Step1Settings: React.FC<Props> = ({
         instruction={customAnalyzeInstruction}
         onInstructionChange={setCustomAnalyzeInstruction}
         defaultInstruction={DEFAULT_ANALYZE_INSTRUCTION}
-      />
-      <InstructionModal
-        isOpen={isHookModalOpen}
-        onClose={() => setIsHookModalOpen(false)}
-        title="Viral Hook Lab"
-        instruction={customHookInstruction}
-        onInstructionChange={setCustomHookInstruction}
-        defaultInstruction={DEFAULT_HOOK_INSTRUCTION}
       />
 
     </div>

@@ -335,11 +335,6 @@ export const DEFAULT_IMPROVE_INSTRUCTION = `
 You are a Script Doctor. Your job is to take an existing script and surgically improve it based on specific feedback while preserving its core message and tone.
 `.trim();
 
-export const DEFAULT_HOOK_INSTRUCTION = `
-You are a Viral Marketing Expert specializing in "Scroll-Stopping" hooks. 
-You understand psychological triggers like curiosity gaps, loss aversion, and authority.
-`.trim();
-
 export const DEFAULT_MUSIC_INSTRUCTION = `
 You are an expert music prompt engineer for Suno AI.
 
@@ -521,34 +516,6 @@ export const improveScript = async (script: string, instruction: string, customI
   });
 };
 
-export const generateViralHooks = async (topic: string, customInstruction?: string): Promise<string[]> => {
-  const systemInstruction = customInstruction?.trim() || DEFAULT_HOOK_INSTRUCTION;
-
-  const prompt = `
-  TASK: Write 5 distinct, high-CTR hooks for a video about: "${topic}".
-  
-  STRATEGIES TO USE:
-  1. The Curiosity Gap: "The one thing everyone gets wrong about..."
-  2. The Negative Hook: "Stop doing [common thing] if you want [result]."
-  3. The Authority Hook: "I spent 100 hours researching [topic] so you don't have to."
-  4. The Transformation Hook: "How [topic] changed everything for [person/group]."
-  5. The Listicle Hook: "3 secrets about [topic] that feel illegal to know."
-  
-  RULES:
-  - Under 15 words per hook.
-  - No intro text. Just the 5 hooks.
-  `;
-
-  return callWithRetry(async () => {
-      const text = await fetchAIResponse(prompt, systemInstruction);
-      // Clean up the output (remove bullets, numbers)
-      return (text || "").split('\n')
-        .map((line: string) => line.trim())
-        .filter((line: string) => line.length > 0)
-        .map((line: string) => line.replace(/^[\d\-\*\•]+\.?\s*/, ''));
-  });
-};
-
 // --- Step 2: Audio Generation ---
 
 export const generateAudio = async (text: string, voiceName: string): Promise<string | null> => {
@@ -619,7 +586,6 @@ ${script}`;
 export const generateSystemInstruction = (
   visualStylePrompt: string, 
   pacing: string,
-  mode: 'visual' | 't2v' = 'visual',
   totalDuration?: number
 ): string => {
   // 1. Handle Duration Overrides
@@ -665,28 +631,15 @@ export const generateSystemInstruction = (
     }
   }
 
-  // 3. Dynamic Prompt Engineering Instructions based on Mode
-  let promptEngineeringSection = "";
-  if (mode === 't2v') {
-     promptEngineeringSection = `
-4. **Prompt Engineering (Text-to-Video Focus)**:
-   - **'text_to_video_prompt' (PRIORITY)**: Write a high-fidelity, cinematic prompt for advanced video models (Sora/Kling/Gen-3). 
-     Structure: [Subject] [Action/Movement] in [Environment]. [Lighting/Atmosphere], [Camera Angle/Movement], [Visual Style].
-     Example: "A futuristic scientist operating a holographic interface in a dark, neon-lit lab. Cinematic lighting, slow dolly zoom, hyper-realistic 8k digital art style, fluid motion, high frame rate."
-   - 'final_image_prompt': A high-resolution reference frame prompt that captures the peak visual moment.
-   - 'image_to_video_prompt': Specific motion vectors and physical dynamics (e.g., "Fluid motion, 4k resolution, cinematic pan, realistic physics").
-     `;
-  } else {
-     promptEngineeringSection = `
+  // 3. Prompt Engineering Instructions
+  const promptEngineeringSection = `
 4. **Prompt Engineering (Image + Motion Focus)**:
    - **'final_image_prompt' (PRIORITY)**: Write a professional, descriptive prompt for high-end image generation. 
      Structure: [Style Name] style, [Subject] [Composition] [Lighting]. [Technical Details: Lens, Aperture, Render Engine].
      Example: "Cyberpunk style, a detailed circuit board with glowing golden traces, macro close-up, soft bokeh, volumetric lighting, unreal engine 5 render, ray-traced reflections, 8k resolution."
    - **'image_to_video_prompt' (PRIORITY)**: Describe the *Camera Dynamics* and *Atmospheric Motion*. Use 4-8 words. 
      Examples: "Slow cinematic zoom in with particles", "Smooth tracking shot right, gentle sway", "Subtle atmospheric particles moving, light rays", "Gentle focus pull from foreground to background".
-   - 'text_to_video_prompt': A standalone cinematic video prompt as a fallback for hybrid workflows.
-     `;
-  }
+  `;
 
   // Use the advanced "Educational Visual Architect" system instruction
   return `
@@ -740,7 +693,6 @@ export const segmentScript = async (
   script: string, 
   visualStylePrompt: string, 
   pacing: string,
-  mode: 'visual' | 't2v' = 'visual',
   totalDuration?: number,
   userInstruction: string = "",
   customSystemInstruction?: string,
@@ -748,7 +700,7 @@ export const segmentScript = async (
 ): Promise<Scene[]> => {
   let systemInstruction = customSystemInstruction;
   if (!systemInstruction) {
-    systemInstruction = generateSystemInstruction(visualStylePrompt, pacing, mode, totalDuration);
+    systemInstruction = generateSystemInstruction(visualStylePrompt, pacing, totalDuration);
   }
 
   // Append user instruction if provided and we are not fully overriding
@@ -778,8 +730,7 @@ export const segmentScript = async (
         "visual_hierarchy": string,
         "layout": string,
         "final_image_prompt": string,
-        "image_to_video_prompt": string,
-        "text_to_video_prompt": string
+        "image_to_video_prompt": string
       }
     ]
   }
@@ -805,7 +756,6 @@ export const segmentScript = async (
         visualIntent: seg.core_concept,
         imagePrompt: seg.final_image_prompt,
         imageToVideoPrompt: seg.image_to_video_prompt,
-        textToVideoPrompt: seg.text_to_video_prompt,
         classification: seg.classification,
         layout: seg.layout,
         visualHierarchy: seg.visual_hierarchy,

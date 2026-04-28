@@ -19,12 +19,23 @@ export const Footer: React.FC = () => {
         {/* Brand Section */}
         <div className="space-y-4">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-cyan-500 flex items-center justify-center shadow-lg shadow-indigo-500/20">
+            <motion.div 
+              animate={{ 
+                scale: [1, 1.05, 1],
+                boxShadow: ["0 0 0px rgba(99, 102, 241, 0)", "0 0 20px rgba(99, 102, 241, 0.4)", "0 0 0px rgba(99, 102, 241, 0)"]
+              }}
+              transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
+              className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-cyan-500 flex items-center justify-center shadow-lg shadow-indigo-500/20"
+            >
               <Sparkles className="w-4 h-4 text-white" />
-            </div>
-            <span className="text-lg font-bold bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent tracking-tight">
+            </motion.div>
+            <motion.span 
+              whileHover={{ x: 5 }}
+              transition={{ type: "spring", stiffness: 300 }}
+              className="text-lg font-bold bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent tracking-tight cursor-default"
+            >
               Gemini Creator Studio
-            </span>
+            </motion.span>
           </div>
           <p className="text-xs text-gray-500 leading-relaxed max-w-xs">
             The ultimate AI-powered production suite for short-form content creators. 

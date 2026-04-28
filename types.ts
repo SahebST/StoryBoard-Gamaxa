@@ -29,10 +29,11 @@ export interface Scene {
   text: string;
   duration: number; // approximate duration in seconds
   visualIntent: string; // Core Concept / Subject Focus
-  imagePrompt?: string; // The exact prompt for the image generator
+  imagePrompt?: string; // The exact prompt for the image generator (Optional in T2V mode)
   imageUrl?: string;
   isGeneratingImage?: boolean;
   imageToVideoPrompt?: string; // Prompt for image-to-video generation
+  textToVideoPrompt?: string; // Prompt for text-to-video generation
   
   // New Visual Architect Fields
   classification?: "Structure" | "Process" | "Comparison" | "Abstract" | string;
@@ -64,6 +65,9 @@ export interface AppState {
   selectedVoice: string | null;
   scenes: Scene[];
   seoData: SEOData | null;
+  
+  // Chat
+  chatHistory: { role: 'user' | 'model'; content: string }[];
   
   // New: Music & Image Config
   musicPrompt: string;

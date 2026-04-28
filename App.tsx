@@ -2,6 +2,8 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { StepIndicator } from './components/StepIndicator';
+import { WorkflowDocModal } from './components/WorkflowDocModal';
+import { Step1Doc, Step2Doc, Step3Doc, Step4Doc } from './components/WorkflowDocs';
 import { ConfirmModal } from './components/ConfirmModal';
 import { HelpModal } from './components/HelpModal';
 import { CoreAIFallbackPopup } from './components/CoreAIFallbackPopup';
@@ -28,22 +30,38 @@ import {
   base64PCMToWavBlob,
   generateScriptFromIdea,
   setActiveModel,
-  generateMusicPrompt
+  generateMusicPrompt,
+  getAppStateContext
 } from './services/geminiService';
 
 import { Sidebar } from './components/Sidebar';
 import { Footer } from './components/Footer';
+import { ChatBot } from './components/ChatBot';
+import { SystemConsole } from './components/SystemConsole';
+import { 
+  Terminal,
+  ArrowUp,
+  ArrowDown
+} from 'lucide-react';
+import { appLogger, ActivityState } from './services/loggerService';
 
 const wait = (ms: number) => new Promise(res => setTimeout(res, ms));
 
 const App: React.FC = () => {
+  const [activity, setActivity] = useState<ActivityState>('idle');
+
+  useEffect(() => {
+    return appLogger.subscribeActivity(setActivity);
+  }, []);
+
   const [state, setState] = useState<AppState>(() => {
     const saved = localStorage.getItem('storyboard_gamaxa_state');
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        // Ensure loading states are reset
+        // Ensure loading states are reset and new fields have defaults
         return {
+          chatHistory: [],
           ...parsed,
           isAnalyzing: false,
           isImproving: false,
@@ -68,6 +86,7 @@ const App: React.FC = () => {
       selectedVoice: null,
       scenes: [],
       seoData: null,
+      chatHistory: [],
       musicPrompt: "",
       musicStyle: "Auto",
       musicIntensity: "Balanced",
@@ -101,6 +120,11 @@ const App: React.FC = () => {
   const [imageModel, setImageModel] = useState(() => localStorage.getItem('storyboard_gamaxa_image_model') || "gemini-2.5-flash");
 
   const [isHelpOpen, setIsHelpOpen] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isWorkflowStep1Open, setIsWorkflowStep1Open] = useState(false);
+  const [isWorkflowStep2Open, setIsWorkflowStep2Open] = useState(false);
+  const [isWorkflowStep3Open, setIsWorkflowStep3Open] = useState(false);
+  const [isWorkflowStep4Open, setIsWorkflowStep4Open] = useState(false);
   const [direction, setDirection] = useState(0); // 1 for forward, -1 for backward
   const [isAdvancedMode, setIsAdvancedMode] = useState(false);
   const [fallbackState, setFallbackState] = useState<{
@@ -224,6 +248,7 @@ const App: React.FC = () => {
             selectedVoice: null,
             scenes: [],
             seoData: null,
+            chatHistory: [],
             musicPrompt: "",
             musicStyle: "Auto",
             musicIntensity: "Balanced",
@@ -342,7 +367,7 @@ const App: React.FC = () => {
 
   const handleGenerateAudio = async (voice: string) => {
     setState(prev => ({ ...prev, isGeneratingAudio: true }));
-    const audioData = await generateAudio(state.scriptText, voice);
+    const audioData = await generateAudio(state.scriptText, voice, audioProvider, audioModel);
     setState(prev => ({
       ...prev,
       audioBase64: audioData,
@@ -398,7 +423,7 @@ const App: React.FC = () => {
   }, [state.currentStep, state.seoData, state.scriptText, generateSEOData]);
 
   // --- Global ---
-
+  const [isConsoleOpen, setIsConsoleOpen] = useState(false);
   const [isConfirmingRestart, setIsConfirmingRestart] = useState(false);
 
   const handleRestart = () => {
@@ -414,6 +439,7 @@ const App: React.FC = () => {
       selectedVoice: null,
       scenes: [],
       seoData: null,
+      chatHistory: [],
       musicPrompt: "",
       musicStyle: "Auto",
       musicIntensity: "Balanced",
@@ -443,12 +469,46 @@ const App: React.FC = () => {
         />
       )}
       <HelpModal isOpen={isHelpOpen} onClose={() => setIsHelpOpen(false)} />
+      <WorkflowDocModal 
+        isOpen={isWorkflowStep1Open} 
+        onClose={() => { setIsWorkflowStep1Open(false); setIsSidebarOpen(true); }} 
+        onOk={() => { setIsWorkflowStep1Open(false); handleStepClick(Step.Settings); }}
+        title="Script Lab" 
+        themeColor="indigo"
+        content={<Step1Doc />} 
+      />
+      <WorkflowDocModal 
+        isOpen={isWorkflowStep2Open} 
+        onClose={() => { setIsWorkflowStep2Open(false); setIsSidebarOpen(true); }} 
+        onOk={() => { setIsWorkflowStep2Open(false); handleStepClick(Step.ScriptAudio); }}
+        title="Audio" 
+        themeColor="violet"
+        content={<Step2Doc />} 
+      />
+      <WorkflowDocModal 
+        isOpen={isWorkflowStep3Open} 
+        onClose={() => { setIsWorkflowStep3Open(false); setIsSidebarOpen(true); }} 
+        onOk={() => { setIsWorkflowStep3Open(false); handleStepClick(Step.Images); }}
+        title="Visuals" 
+        themeColor="fuchsia"
+        content={<Step3Doc />} 
+      />
+      <WorkflowDocModal 
+        isOpen={isWorkflowStep4Open} 
+        onClose={() => { setIsWorkflowStep4Open(false); setIsSidebarOpen(true); }} 
+        onOk={() => { setIsWorkflowStep4Open(false); handleStepClick(Step.SEO); }}
+        title="SEO" 
+        themeColor="pink"
+        content={<Step4Doc />} 
+      />
       <div className="w-full max-w-6xl relative">
         
         {/* Header */}
         <div className="mb-4 flex flex-col items-center gap-3 relative">
           
           <Sidebar 
+            isOpen={isSidebarOpen}
+            setIsOpen={setIsSidebarOpen}
             currentProvider={currentProvider}
             currentModel={currentModel}
             onProviderChange={handleProviderChange}
@@ -474,6 +534,11 @@ const App: React.FC = () => {
               />
             }
             onOpenHelp={() => setIsHelpOpen(true)}
+            onSideNavigate={handleStepClick}
+            onOpenWorkflowStep1={() => setIsWorkflowStep1Open(true)}
+            onOpenWorkflowStep2={() => setIsWorkflowStep2Open(true)}
+            onOpenWorkflowStep3={() => setIsWorkflowStep3Open(true)}
+            onOpenWorkflowStep4={() => setIsWorkflowStep4Open(true)}
           />
           <input 
             type="file" 
@@ -484,9 +549,35 @@ const App: React.FC = () => {
           />
 
           <div className="text-center">
-            <h1 className="text-3xl font-extrabold tracking-tight bg-gradient-to-r from-indigo-400 to-cyan-400 bg-clip-text text-transparent">
+            <motion.h1 
+              initial={{ opacity: 0, scale: 0.98, filter: 'blur(8px)', backgroundPosition: '200% 0%' }}
+              animate={{ 
+                opacity: 1, 
+                scale: 1,
+                filter: 'blur(0px)',
+                backgroundPosition: ['150% 0%', '-150% 0%']
+              }}
+              transition={{ 
+                opacity: { duration: 1.2 },
+                scale: { duration: 1.2 },
+                backgroundPosition: { 
+                  duration: 8, 
+                  repeat: Infinity, 
+                  ease: "linear",
+                  repeatDelay: 2
+                },
+                ease: [0.23, 1, 0.32, 1] 
+              }}
+              style={{ 
+                backgroundImage: 'linear-gradient(110deg, #cbd5e1 30%, #f8fafc 45%, #ffffff 50%, #f8fafc 55%, #cbd5e1 70%)',
+                backgroundSize: '200% 100%',
+                WebkitBackgroundClip: 'text',
+                backgroundClip: 'text'
+              }}
+              className="text-4xl md:text-5xl font-black tracking-tighter text-transparent cursor-default drop-shadow-[0_2px_10px_rgba(255,255,255,0.1)] py-4 select-none"
+            >
               Gemini Creator Studio
-            </h1>
+            </motion.h1>
             <div className="mt-3 flex items-center justify-center gap-3">
               <input
                 type="text"
@@ -575,6 +666,8 @@ const App: React.FC = () => {
                   onMusicIntensityChange={(i) => setState(prev => ({...prev, musicIntensity: i}))}
                   isGeneratingMusic={state.isGeneratingMusic}
                   isAdvancedMode={isAdvancedMode}
+                  audioProvider={audioProvider}
+                  audioModel={audioModel}
                   onGenerateMusicPrompt={async (isRegeneration, customInstruction) => {
                     setState(prev => ({ ...prev, isGeneratingMusic: true }));
                     try {
@@ -618,7 +711,7 @@ const App: React.FC = () => {
                   onGenerateSEO={async (customInstruction) => {
                     setState(prev => ({ ...prev, isGeneratingSEO: true }));
                     try {
-                      const data = await generateSEO(state.scriptText, state.settings.targetAudience, state.settings.tone, customInstruction);
+                      const data = await generateSEO(state.scriptText, "General Audience", "Engaging", customInstruction);
                       setState(prev => ({ ...prev, seoData: data, isGeneratingSEO: false }));
                     } catch (e) {
                       console.error("Failed to generate SEO", e);
@@ -632,6 +725,68 @@ const App: React.FC = () => {
         </div>
       </div>
       
+      <ChatBot 
+        history={state.chatHistory} 
+        onHistoryChange={(h) => setState(prev => ({ ...prev, chatHistory: h }))}
+        currentProvider={currentProvider}
+        currentModel={currentModel}
+        onProviderChange={setCurrentProvider}
+        onModelChange={setCurrentModel}
+        appContext={getAppStateContext(state)}
+      />
+
+      {/* Floating System Console Trigger */}
+      <div className="fixed top-6 right-6 z-[100] flex flex-col gap-2">
+        <motion.button
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+          onClick={() => setIsConsoleOpen(true)}
+          className={`p-3.5 rounded-2xl border transition-all shadow-2xl flex items-center justify-center relative overflow-hidden group
+            ${activity !== 'idle' ? 'bg-indigo-600 border-indigo-400 text-white ring-4 ring-indigo-500/20' : 'bg-[#0f172a]/90 backdrop-blur-md border-gray-700 text-emerald-500 hover:border-emerald-500/50 hover:bg-[#161b22]'}
+          `}
+          title="Open System Console"
+        >
+          <div className="relative">
+            <Terminal className={`w-6 h-6 ${activity !== 'idle' ? 'opacity-20 scale-75' : 'group-hover:scale-110'} transition-all duration-300`} />
+            
+            <AnimatePresence mode="wait">
+              {activity === 'outgoing' && (
+                <motion.div
+                  key="outgoing"
+                  initial={{ y: 15, opacity: 0 }}
+                  animate={{ y: 0, opacity: 1 }}
+                  exit={{ y: -15, opacity: 0 }}
+                  className="absolute inset-0 flex items-center justify-center"
+                >
+                  <ArrowUp className="w-5 h-5 text-white animate-bounce" />
+                </motion.div>
+              )}
+              {activity === 'incoming' && (
+                <motion.div
+                  key="incoming"
+                  initial={{ y: -15, opacity: 0 }}
+                  animate={{ y: 0, opacity: 1 }}
+                  exit={{ y: 15, opacity: 0 }}
+                  className="absolute inset-0 flex items-center justify-center"
+                >
+                  <ArrowDown className="w-5 h-5 text-white animate-pulse" />
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+
+          <span className={`absolute top-2 right-2 w-2 h-2 rounded-full border border-[#0d1117] shadow-sm ${
+            activity === 'idle' ? 'bg-emerald-500 animate-pulse' : 
+            activity === 'outgoing' ? 'bg-amber-400' : 'bg-blue-400'
+          }`}></span>
+        </motion.button>
+      </div>
+
+      <SystemConsole 
+        isOpen={isConsoleOpen} 
+        onClose={() => setIsConsoleOpen(false)} 
+      />
+
       <Footer />
 
       <ConfirmModal

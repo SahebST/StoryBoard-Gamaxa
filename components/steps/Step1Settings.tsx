@@ -207,7 +207,7 @@ export const Step1Settings: React.FC<Props> = ({
 
       {/* RIGHT COLUMN: Analysis Dashboard (Only Visible if Analysis Exists) */}
       {analysis && (
-        <div className="xl:w-[400px] flex flex-col gap-6 animate-slide-left">
+        <div className="xl:w-[450px] flex flex-col gap-5 animate-slide-left">
            
            <div className="flex items-center justify-between">
              <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">
@@ -224,70 +224,80 @@ export const Step1Settings: React.FC<Props> = ({
              )}
            </div>
 
-           <div className="flex-1 bg-[#161b22] border border-gray-800 rounded-xl overflow-hidden flex flex-col shadow-2xl">
+           <div className="flex-1 bg-[#161b22]/40 backdrop-blur-2xl border border-gray-700/50 rounded-2xl overflow-hidden flex flex-col shadow-[0_8px_32px_rgba(0,0,0,0.5)] relative">
               
-              {/* Header Score */}
-              <div className="p-6 border-b border-gray-800 bg-[#0d1117] flex items-center justify-between">
-                 <div>
-                   <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Viral Potential</p>
-                   <div className={`text-4xl font-black ${getScoreColor(analysis.score).split(' ')[0]}`}>
-                     {analysis.score}<span className="text-lg text-gray-600 font-medium">/100</span>
+              <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/10 rounded-full blur-[80px] pointer-events-none"></div>
+
+              {/* Header Score & Bento Grip */}
+              <div className="p-6 pb-4 relative z-10 space-y-4">
+                 
+                 <div className="flex items-start justify-between">
+                   <div className="space-y-1">
+                     <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Viral Potential</p>
+                     <div className="flex items-baseline gap-2">
+                       <span className={`text-5xl font-black tracking-tighter ${getScoreColor(analysis.score).split(' ')[0]}`}>
+                         {analysis.score}
+                       </span>
+                       <span className="text-xl text-gray-600 font-bold">/100</span>
+                     </div>
+                   </div>
+                   <div className={`px-4 py-1.5 rounded-full border text-[10px] font-black uppercase tracking-widest shadow-lg ${getScoreColor(analysis.score)} bg-opacity-20`}>
+                      {analysis.score >= 80 ? '🔥 Viral Hit' : analysis.score >= 60 ? '✨ Good' : '⚠️ Needs Work'}
                    </div>
                  </div>
-                 <div className={`px-4 py-2 rounded-lg border text-xs font-bold uppercase tracking-widest ${getScoreColor(analysis.score)}`}>
-                    {analysis.score >= 80 ? 'Viral Hit' : analysis.score >= 60 ? 'Good' : 'Needs Work'}
-                 </div>
-              </div>
 
-              <div className="p-6 space-y-6 overflow-y-auto custom-scrollbar flex-1">
-                 
                  {/* Metrics Grid */}
-                 <div className="grid grid-cols-2 gap-3">
-                    <div className="bg-[#1F2937] p-3 rounded-lg border border-gray-700">
-                       <p className="text-[10px] text-gray-500 uppercase font-bold mb-1">Hook Rating</p>
-                       <p className={`text-sm font-bold ${analysis.hookRating === 'Viral' ? 'text-pink-400' : analysis.hookRating === 'Good' ? 'text-white' : 'text-amber-400'}`}>
+                 <div className="grid grid-cols-2 gap-3 pt-2">
+                    <div className="bg-black/30 p-4 rounded-xl border border-white/5 shadow-inner">
+                       <p className="text-[10px] text-gray-400 uppercase font-bold mb-1">Hook Rating</p>
+                       <p className={`text-lg font-bold tracking-tight ${analysis.hookRating === 'Viral' ? 'text-pink-400 drop-shadow-[0_0_8px_rgba(244,114,182,0.5)]' : analysis.hookRating === 'Good' ? 'text-emerald-400' : 'text-amber-400'}`}>
                          {analysis.hookRating}
                        </p>
                     </div>
-                    <div className="bg-[#1F2937] p-3 rounded-lg border border-gray-700">
-                       <p className="text-[10px] text-gray-500 uppercase font-bold mb-1">Pacing</p>
-                       <p className="text-sm font-bold text-white">{analysis.pacing}</p>
+                    <div className="bg-black/30 p-4 rounded-xl border border-white/5 shadow-inner">
+                       <p className="text-[10px] text-gray-400 uppercase font-bold mb-1">Pacing</p>
+                       <p className="text-sm font-bold text-gray-200 capitalize leading-tight">{analysis.pacing}</p>
                     </div>
                  </div>
+              </div>
 
+              <div className="px-6 pb-6 space-y-5 overflow-y-auto custom-scrollbar flex-1 relative z-10">
+                 
                  {/* Fact Check */}
-                 <div>
-                    <h4 className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-3 flex items-center gap-2">
-                       Fact Check / Safety
-                       <div className="h-px bg-gray-800 flex-1"></div>
+                 <div className="bg-white/5 rounded-xl border border-white/5 p-4">
+                    <h4 className="text-[10px] font-bold text-cyan-400 uppercase tracking-widest mb-3 flex items-center gap-2">
+                       <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
+                       Fact Check & Safety
                     </h4>
-                    <div className="space-y-2">
+                    <div className="space-y-2.5">
                        {(analysis.factCheck || []).map((fact, i) => (
-                          <div key={i} className="flex items-start gap-2 text-xs text-gray-300 bg-[#0d1117] p-2 rounded border border-gray-800">
-                             {fact && fact.toLowerCase().includes('verified') ? <CheckCircle /> : <AlertTriangle />}
-                             <span className="leading-relaxed">{fact}</span>
+                          <div key={i} className="flex items-start gap-2.5 text-xs text-gray-300">
+                             <div className="mt-0.5 shrink-0">
+                               {fact && fact.toLowerCase().includes('verified') ? <CheckCircle /> : <AlertTriangle />}
+                             </div>
+                             <span className="leading-relaxed font-medium">{fact}</span>
                           </div>
                        ))}
                     </div>
                  </div>
 
                  {/* Critique */}
-                 <div>
-                    <h4 className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-3 flex items-center gap-2">
-                       Critique
-                       <div className="h-px bg-gray-800 flex-1"></div>
+                 <div className="bg-white/5 rounded-xl border border-white/5 p-4">
+                    <h4 className="text-[10px] font-bold text-purple-400 uppercase tracking-widest mb-3 flex items-center gap-2">
+                       <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 002-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
+                       Structural Critique
                     </h4>
-                    <div className="space-y-2">
+                    <div className="space-y-3">
                        {analysis.strengths && analysis.strengths.length > 0 && (
-                         <div className="text-xs text-green-300 flex gap-2">
-                            <span className="font-bold shrink-0">+</span>
-                            {analysis.strengths[0]}
+                         <div className="flex gap-3 bg-green-500/10 p-3 rounded-lg border border-green-500/20">
+                            <span className="font-black text-green-400 shrink-0">+</span>
+                            <span className="text-xs text-gray-200 font-medium leading-relaxed">{analysis.strengths[0]}</span>
                          </div>
                        )}
                        {analysis.weaknesses && analysis.weaknesses.length > 0 && (
-                         <div className="text-xs text-red-300 flex gap-2">
-                            <span className="font-bold shrink-0">-</span>
-                            {analysis.weaknesses[0]}
+                         <div className="flex gap-3 bg-red-500/10 p-3 rounded-lg border border-red-500/20">
+                            <span className="font-black text-red-400 shrink-0">-</span>
+                            <span className="text-xs text-gray-200 font-medium leading-relaxed">{analysis.weaknesses[0]}</span>
                          </div>
                        )}
                     </div>
@@ -296,41 +306,41 @@ export const Step1Settings: React.FC<Props> = ({
               </div>
 
               {/* Improvement Actions */}
-              <div className="p-4 bg-[#0d1117] border-t border-gray-800">
-                 <p className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest mb-3">AI Editor Actions</p>
-                 <div className="grid grid-cols-2 gap-2">
+              <div className="p-4 bg-black/40 backdrop-blur-xl border-t border-white/10 relative z-10">
+                 <p className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest mb-3 text-center">AI Editor Actions</p>
+                 <div className="grid grid-cols-2 gap-3">
                     <button 
                        onClick={() => onImprove("Make the hook more viral and shocking.", isAdvancedMode ? customAnalyzeInstruction : undefined)}
                        disabled={isImproving}
-                       className="bg-[#1F2937] hover:bg-indigo-900/30 border border-gray-700 hover:border-indigo-500/50 text-gray-300 text-[10px] font-bold py-2 rounded transition-all flex items-center justify-center gap-1 disabled:opacity-50"
+                       className="bg-[#1F2937]/80 hover:bg-indigo-500/20 border border-gray-600 hover:border-indigo-400 text-gray-300 text-[10px] font-bold py-2.5 rounded-lg transition-all flex items-center justify-center gap-1.5 disabled:opacity-50"
                     >
-                       {isImproving ? <span className="animate-pulse">Processing...</span> : <><MagicWand /> Boost Hook</>}
+                       {isImproving ? <span className="animate-pulse">Processing...</span> : <><svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg> Boost Hook</>}
                     </button>
                     <button 
                        onClick={() => onImprove("Fix grammar and make the tone more conversational.", isAdvancedMode ? customAnalyzeInstruction : undefined)}
                        disabled={isImproving}
-                       className="bg-[#1F2937] hover:bg-indigo-900/30 border border-gray-700 hover:border-indigo-500/50 text-gray-300 text-[10px] font-bold py-2 rounded transition-all disabled:opacity-50"
+                       className="bg-[#1F2937]/80 hover:bg-indigo-500/20 border border-gray-600 hover:border-indigo-400 text-gray-300 text-[10px] font-bold py-2.5 rounded-lg transition-all disabled:opacity-50"
                     >
                        {isImproving ? <span className="animate-pulse">Processing...</span> : "Fix Grammar"}
                     </button>
                     <button 
                        onClick={() => onImprove("Make the script shorter and more punchy (under 40s).", isAdvancedMode ? customAnalyzeInstruction : undefined)}
                        disabled={isImproving}
-                       className="bg-[#1F2937] hover:bg-indigo-900/30 border border-gray-700 hover:border-indigo-500/50 text-gray-300 text-[10px] font-bold py-2 rounded transition-all disabled:opacity-50"
+                       className="bg-[#1F2937]/80 hover:bg-indigo-500/20 border border-gray-600 hover:border-indigo-400 text-gray-300 text-[10px] font-bold py-2.5 rounded-lg transition-all disabled:opacity-50"
                     >
                        {isImproving ? <span className="animate-pulse">Processing...</span> : "Shorten"}
                     </button>
                     <button 
                        onClick={() => onImprove(analysis.improvementSuggestion, isAdvancedMode ? customAnalyzeInstruction : undefined)}
                        disabled={isImproving}
-                       className="bg-indigo-600 hover:bg-indigo-500 text-white border border-indigo-500 text-[10px] font-bold py-2 rounded transition-all shadow-lg shadow-indigo-900/20 hover:shadow-indigo-500/40 active:scale-95 disabled:opacity-50"
+                       className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold py-2.5 rounded-lg transition-all flex items-center justify-center gap-1.5 shadow-[0_0_15px_rgba(79,70,229,0.4)] active:scale-95 disabled:opacity-50"
                     >
                        {isImproving ? (
-                          <div className="flex items-center gap-1">
-                             <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                          <div className="flex items-center gap-1.5">
+                             <svg className="animate-spin h-3.5 w-3.5" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
                              Applying...
                           </div>
-                       ) : "Auto Fix"}
+                       ) : <><MagicWand /> Auto Fix</>}
                     </button>
                  </div>
               </div>

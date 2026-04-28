@@ -1,11 +1,12 @@
 
 import React, { useState, useEffect } from 'react';
-import { Loader2, Check, Wand2, Copy } from 'lucide-react';
+import { Loader2, Check, Wand2, Copy, ChevronDown, ChevronUp, FolderOpen, Save } from 'lucide-react';
 import { Scene } from '../../types';
-import { segmentScript, generateSceneImage, generateSystemInstruction, analyzeScriptForVisuals } from '../../services/geminiService';
+import { segmentScript, generateSceneImage, generateSystemInstruction, analyzeScriptForVisuals, DEFAULT_ANALYZE_VISUALS_INSTRUCTION } from '../../services/geminiService';
 import { Preset, savePresetToFirebase, listUserPresets, deletePresetFromFirebase } from '../../services/presetService';
 import { InstructionModal } from '../InstructionModal';
 import { VisualEngineControl, STAGES_CONFIG } from '../VisualEngineControl';
+import { PresetOverlay } from '../PresetOverlay';
 
 interface Props {
   script: string;
@@ -250,11 +251,26 @@ export const Step3Images: React.FC<Props> = ({
   
   // viewMode: 'standard' (Prompt + Image) or 'prompts' (Text Prompts Only)
   const [viewMode, setViewMode] = useState<'standard' | 'prompts'>('standard');
+  const [generationType, setGenerationType] = useState<'visual' | 't2v' | null>(null);
   
   // Sync local script if global script changes (e.g. navigation back and forth)
   useEffect(() => {
     setLocalScript(initialScript);
   }, [initialScript]);
+
+  // Determine initial generation type based on existing scenes data
+  useEffect(() => {
+    if (scenes.length > 0 && generationType === null) {
+        // Heuristic: If we have textToVideoPrompt but no imagePrompt (or mostly), it's T2V.
+        const isT2V = scenes.some(s => !!s.textToVideoPrompt && !s.imagePrompt);
+        setGenerationType(isT2V ? 't2v' : 'visual');
+        
+        // If it looks like T2V, default to prompts view
+        if (isT2V) {
+            setViewMode('prompts');
+        }
+    }
+  }, [scenes, generationType]);
 
   // Configuration
   const [activeRatio, setActiveRatio] = useState("9:16");
@@ -272,6 +288,10 @@ export const Step3Images: React.FC<Props> = ({
   const [generatingImageId, setGeneratingImageId] = useState<number | null>(null);
   const [isAutoGenerating, setIsAutoGenerating] = useState(false);
   const [copiedId, setCopiedId] = useState<number | null>(null);
+  const [isBackboneExpanded, setIsBackboneExpanded] = useState(false);
+  const [isHighPriority, setIsHighPriority] = useState(false);
+  const [isOverrideDefault, setIsOverrideDefault] = useState(false);
+  const [isPresetOverlayOpen, setIsPresetOverlayOpen] = useState(false);
 
   // AI Direction System
   const [activeDirectionTab, setActiveDirectionTab] = useState<'ALL' | 'STAGE 1' | 'STAGE 2' | 'STAGE 3' | 'STAGE 4'>('ALL');
@@ -317,6 +337,8 @@ export const Step3Images: React.FC<Props> = ({
   const [isSavingPreset, setIsSavingPreset] = useState(false);
 
   // Script Analysis Trigger State
+  const [isAnalyzeVisualsModalOpen, setIsAnalyzeVisualsModalOpen] = useState(false);
+  const [customAnalyzeVisualsInstruction, setCustomAnalyzeVisualsInstruction] = useState(DEFAULT_ANALYZE_VISUALS_INSTRUCTION);
   const [isAnalyzingScript, setIsAnalyzingScript] = useState(false);
   const [analysisStatus, setAnalysisStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [generatedStyles, setGeneratedStyles] = useState<{label: string, prompt: string, desc: string}[]>([]);
@@ -328,11 +350,11 @@ export const Step3Images: React.FC<Props> = ({
     setAnalysisStatus('idle');
     try {
       const availablePresets = AESTHETICS.map(a => a.label).filter(l => l !== 'Custom' && l !== 'Auto-select');
-      const result = await analyzeScriptForVisuals(localScript, availablePresets);
+      const result = await analyzeScriptForVisuals(localScript, availablePresets, isAdvancedModeGlobal ? customAnalyzeVisualsInstruction : undefined);
       
       const newStyles = result.styles_generated.map(s => ({
-        label: s,
-        prompt: `Visual Style: ${s}. MANDATORY VISUALS: Ensure the style strictly follows ${s}.`,
+        label: s.name,
+        prompt: `Visual Style: ${s.name}. MANDATORY VISUALS: ${s.detailed_prompt}`,
         desc: 'AI Generated Style'
       }));
       
@@ -390,7 +412,7 @@ export const Step3Images: React.FC<Props> = ({
 
   const handleToggleAdvancedMode = () => {
     const durationVal = (durationMode === 'custom' && customDuration) ? parseInt(customDuration, 10) : undefined;
-    const defaultInstruction = generateSystemInstruction(editableAestheticPrompt, activePacing, durationVal);
+    const defaultInstruction = generateSystemInstruction(editableAestheticPrompt, activePacing, generationType || 'visual', durationVal);
     setCustomSystemInstruction(defaultInstruction);
     setIsVisualModalOpen(true);
   };
@@ -447,7 +469,7 @@ export const Step3Images: React.FC<Props> = ({
 
   const isLongScript = localScript.length > 8000;
 
-  const handleGeneratePlan = async (view: 'standard' | 'prompts') => {
+  const handleGeneratePlan = async (type: 'visual' | 't2v', view: 'standard' | 'prompts') => {
     if (!localScript.trim()) return;
     
     if (isLongScript) {
@@ -466,6 +488,7 @@ export const Step3Images: React.FC<Props> = ({
 
     setIsGeneratingPlan(true);
     setViewMode(view);
+    setGenerationType(type);
     
     // Clear immediately to show feedback
     onUpdateScenes([]); 
@@ -478,10 +501,13 @@ export const Step3Images: React.FC<Props> = ({
         localScript, 
         editableAestheticPrompt, 
         activePacing, 
+        type, 
         durationVal, 
         aiDirectionAll,
         isAdvancedModeGlobal ? customSystemInstruction : undefined,
-        aiDirectionStages['STAGE 1']
+        aiDirectionStages['STAGE 1'],
+        isHighPriority,
+        isOverrideDefault
       );
       
       onUpdateScenes(newScenes);
@@ -546,6 +572,7 @@ export const Step3Images: React.FC<Props> = ({
   const handleClearScenes = () => {
     if (window.confirm("Clear all scenes and images?")) {
         onUpdateScenes([]);
+        setGenerationType(null);
         setLastGeneratedConfig(null);
     }
   };
@@ -577,7 +604,7 @@ export const Step3Images: React.FC<Props> = ({
 
   const handleCopyAll = (scene: Scene) => {
     const imgPrompt = scene.imagePrompt || "";
-    const vidPrompt = scene.imageToVideoPrompt || "";
+    const vidPrompt = scene.imageToVideoPrompt || scene.textToVideoPrompt || "";
     const text = `Image prompt :\n${imgPrompt}\nImage video prompt :\n${vidPrompt}`;
     navigator.clipboard.writeText(text);
     setCopiedId(scene.id);
@@ -585,11 +612,11 @@ export const Step3Images: React.FC<Props> = ({
   };
 
   const completedCount = scenes.filter(s => s.imageUrl).length;
-  // All complete if we have images for all scenes
-  const isAllComplete = scenes.length > 0 && completedCount === scenes.length;
+  // All complete if we have images for all scenes OR if we are in T2V mode (no images to generate)
+  const isAllComplete = scenes.length > 0 && (generationType === 't2v' || completedCount === scenes.length);
   const allImagesReady = scenes.length > 0 && completedCount === scenes.length;
   const isPlanReady = scenes.length > 0;
-  const progressPercent = isPlanReady ? Math.round((completedCount / scenes.length) * 100) : 0;
+  const progressPercent = isPlanReady && generationType === 'visual' ? Math.round((completedCount / scenes.length) * 100) : 0;
   
   const currentAestheticDesc = [...AESTHETICS, ...generatedStyles].find(a => selectedAesthetics.includes(a.label))?.desc;
 
@@ -609,7 +636,16 @@ export const Step3Images: React.FC<Props> = ({
          </div>
          
          {/* Script Analysis Trigger */}
-         <div className="mt-3 flex justify-end">
+         <div className="mt-3 flex justify-end gap-2">
+            {isAdvancedModeGlobal && (
+               <button 
+                 onClick={() => setIsAnalyzeVisualsModalOpen(true)} 
+                 className="text-amber-500 hover:text-amber-400 p-2 text-sm rounded-lg border border-gray-800 bg-[#161b22] hover:bg-amber-500/10 hover:border-amber-500/50 transition-colors"
+                 title="Edit AI Instructions"
+               >
+                 <GearIcon />
+               </button>
+            )}
             <button
               onClick={handleAnalyzeScriptTrigger}
               disabled={isAnalyzingScript || !localScript.trim()}
@@ -788,38 +824,87 @@ export const Step3Images: React.FC<Props> = ({
         {/* AI Direction & Advanced Control (Row) */}
         <div>
            <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 gap-4">
-             <div className="text-[10px] font-bold tracking-widest text-gray-500 uppercase border-l-2 border-indigo-500 pl-2">
-               06 — AI Direction
+             <div className="flex items-center gap-4">
+              <div className="text-[10px] font-bold tracking-widest text-gray-500 uppercase border-l-2 border-indigo-500 pl-2">
+                06 — AI Direction
+              </div>
+              <button 
+                onClick={() => setIsPresetOverlayOpen(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600/10 border border-indigo-500/20 text-indigo-400 text-[9px] font-bold uppercase tracking-wider hover:bg-indigo-600 hover:text-white transition-all group"
+                title="Manage Presets"
+              >
+                <FolderOpen className="w-3.5 h-3.5 group-hover:scale-110 transition-transform" />
+                Manage Presets
+              </button>
              </div>
              
-             <div className="flex bg-[#161b22] p-1 rounded-xl border border-gray-800">
-               {(['ALL', 'STAGE 1', 'STAGE 2', 'STAGE 3', 'STAGE 4'] as const).map((tab) => (
+             <div className="flex flex-wrap items-center gap-2">
+               <div className="flex bg-[#161b22] p-1 rounded-xl border border-gray-800">
                  <button
-                   key={tab}
-                   onClick={() => setActiveDirectionTab(tab)}
-                   className={`px-3 py-1.5 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all ${
-                     activeDirectionTab === tab 
-                       ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/20' 
-                       : 'text-gray-500 hover:text-gray-300'
+                   onClick={() => setIsHighPriority(!isHighPriority)}
+                   className={`px-3 py-1.5 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all flex items-center gap-1.5 ${
+                     isHighPriority 
+                       ? 'bg-amber-600/20 text-white border border-amber-500/30' 
+                       : 'text-gray-500 hover:text-gray-300 border border-transparent'
                    }`}
+                   title="High Priority: Custom instructions take precedence"
                  >
-                   {tab}
+                   <div className={`w-1.5 h-1.5 rounded-full ${isHighPriority ? 'bg-amber-500 animate-pulse' : 'bg-gray-600'}`}></div>
+                   High Priority
                  </button>
-               ))}
+                 <button
+                   onClick={() => setIsOverrideDefault(!isOverrideDefault)}
+                   className={`px-3 py-1.5 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all flex items-center gap-1.5 ${
+                     isOverrideDefault 
+                       ? 'bg-emerald-600/20 text-white border border-emerald-500/30' 
+                       : 'text-gray-500 hover:text-gray-300 border border-transparent'
+                   }`}
+                   title="Override: Completely replace default instructions"
+                 >
+                   <div className={`w-1.5 h-1.5 rounded-full ${isOverrideDefault ? 'bg-emerald-500 animate-pulse' : 'bg-gray-600'}`}></div>
+                   Override
+                 </button>
+               </div>
+
+               <div className="flex bg-[#161b22] p-1 rounded-xl border border-gray-800">
+                 {(['ALL', 'STAGE 1', 'STAGE 2', 'STAGE 3', 'STAGE 4'] as const).map((tab) => (
+                   <button
+                     key={tab}
+                     onClick={() => setActiveDirectionTab(tab)}
+                     className={`px-3 py-1.5 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all ${
+                       activeDirectionTab === tab 
+                         ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/20' 
+                         : 'text-gray-500 hover:text-gray-300'
+                     }`}
+                   >
+                     {tab}
+                   </button>
+                 ))}
+               </div>
              </div>
            </div>
            
            <div className="space-y-3">
-             {/* Backbone Display (Read-only) */}
+             {/* Backbone Display (Read-only / Expandable) */}
              {activeDirectionTab !== 'ALL' && (
                <div className="bg-indigo-500/5 border border-indigo-500/20 rounded-xl p-3">
-                 <div className="flex items-center gap-2 mb-1">
-                   <div className="w-1 h-1 rounded-full bg-indigo-400"></div>
-                   <span className="text-[8px] font-bold uppercase tracking-widest text-indigo-400/70">Default Backbone (Mandatory)</span>
+                 <div className="flex items-center justify-between gap-2 mb-1">
+                   <div className="flex items-center gap-2">
+                     <div className="w-1 h-1 rounded-full bg-indigo-400"></div>
+                     <span className="text-[8px] font-bold uppercase tracking-widest text-indigo-400/70">Default Backbone (Mandatory)</span>
+                   </div>
+                   <button 
+                     onClick={() => setIsBackboneExpanded(!isBackboneExpanded)}
+                     className="p-1 hover:bg-indigo-500/10 rounded transition-colors text-indigo-400"
+                   >
+                     {isBackboneExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                   </button>
                  </div>
-                 <p className="text-[10px] text-gray-400 italic leading-relaxed">
-                   {defaultInstructions[activeDirectionTab]}
-                 </p>
+                 {isBackboneExpanded && (
+                   <p className="text-[10px] text-gray-400 italic leading-relaxed pt-1">
+                     {defaultInstructions[activeDirectionTab]}
+                   </p>
+                 )}
                </div>
              )}
 
@@ -862,7 +947,7 @@ export const Step3Images: React.FC<Props> = ({
         pacing={activePacing}
         duration={durationMode === 'custom' ? customDuration : 'auto'}
         canvasSize={activeRatio}
-        generationMode={'visual'}
+        generationMode={generationType || 'visual'}
         scenes={scenes}
         onUpdateScenes={onUpdateScenes}
       />
@@ -872,7 +957,7 @@ export const Step3Images: React.FC<Props> = ({
         <div className="space-y-6 pt-10 border-t border-gray-800/50 animate-slide-up">
            
            <h3 className="text-3xl font-extrabold text-white tracking-tight mb-8">
-             Visual Storyboard
+             {generationType === 't2v' ? 'Text-to-Video Plan' : 'Visual Storyboard'}
            </h3>
 
            {/* GENERATE ALL / PROGRESS BAR */}
@@ -894,7 +979,7 @@ export const Step3Images: React.FC<Props> = ({
                  </div>
 
                  {/* Progress Bar (Only visible in Visual Standard Mode) */}
-                 {viewMode === 'standard' && (
+                 {viewMode === 'standard' && generationType === 'visual' && (
                     <div className="flex-1 w-full max-w-md">
                         <div className="flex justify-between mb-2 text-[10px] font-bold uppercase tracking-widest text-gray-500">
                         <span>Rendering Progress</span>
@@ -906,12 +991,12 @@ export const Step3Images: React.FC<Props> = ({
                     </div>
                  )}
                  {/* Spacer for Prompts mode */}
-                 {viewMode === 'prompts' && <div className="flex-1"></div>}
+                 {(viewMode === 'prompts' || generationType === 't2v') && <div className="flex-1"></div>}
 
                  {/* Buttons */}
                  <div className="flex items-center gap-3">
                     {/* Generate All Button (Only Standard Mode) */}
-                    {viewMode === 'standard' && (
+                    {viewMode === 'standard' && generationType === 'visual' && (
                         <button
                             onClick={toggleAutoGenerate}
                             disabled={allImagesReady}
@@ -945,7 +1030,7 @@ export const Step3Images: React.FC<Props> = ({
 
                     {/* Download All Button */}
                     {/* Only useful if images exist */}
-                    {viewMode === 'standard' && (
+                    {viewMode === 'standard' && generationType === 'visual' && (
                         <button
                         onClick={handleDownloadAll}
                         disabled={completedCount === 0}
@@ -966,7 +1051,7 @@ export const Step3Images: React.FC<Props> = ({
               </div>
               
               {/* Info text */}
-              {viewMode === 'standard' && (
+              {viewMode === 'standard' && generationType === 'visual' && (
                 <div className="mt-4 text-center md:text-right">
                     <p className="text-[10px] text-gray-500 uppercase tracking-wide">
                     *Generates images sequentially (one by one) to ensure quality.
@@ -1048,9 +1133,10 @@ export const Step3Images: React.FC<Props> = ({
                          </div>
 
                          {/* PROMPT GRIDS - ADAPTIVE */}
-                         <div className={`grid gap-4 ${viewMode === 'prompts' ? 'md:grid-cols-2' : 'grid-cols-1'}`}>
+                         <div className={`grid gap-4 ${viewMode === 'prompts' && generationType === 'visual' ? 'md:grid-cols-2' : 'grid-cols-1'}`}>
                              
-                             {/* 1. Visual Prompt (Image Gen) */}
+                             {/* 1. Visual Prompt (Image Gen) - Only show if mode is VISUAL */}
+                             {generationType === 'visual' && (
                                 <div className="bg-[#0f1218] rounded-lg p-3 border border-gray-800 relative group/prompt transition-all hover:border-gray-600">
                                     <div className="flex justify-between items-center mb-2">
                                     <span className="text-[9px] font-bold text-gray-500 uppercase flex items-center gap-1">
@@ -1070,8 +1156,10 @@ export const Step3Images: React.FC<Props> = ({
                                     className="w-full bg-transparent text-xs text-gray-400 font-mono focus:outline-none resize-none h-24 custom-scrollbar leading-relaxed"
                                     />
                                 </div>
+                             )}
 
-                             {/* 2. Image to Video Prompt */}
+                             {/* 2. Image to Video Prompt - Only show if mode is VISUAL */}
+                             {generationType === 'visual' && (
                                 <div className="bg-[#0f1218] rounded-lg p-3 border border-gray-800 relative group/prompt transition-all hover:border-gray-600">
                                     <div className="flex justify-between items-center mb-2">
                                         <span className="text-[9px] font-bold text-gray-500 uppercase flex items-center gap-1">
@@ -1092,12 +1180,37 @@ export const Step3Images: React.FC<Props> = ({
                                         className="w-full bg-transparent text-xs text-gray-400 font-mono focus:outline-none resize-none h-24 custom-scrollbar leading-relaxed"
                                     />
                                 </div>
+                             )}
+
+                             {/* 3. Text to Video Prompt - Only show if mode is T2V */}
+                             {generationType === 't2v' && (
+                                <div className="bg-[#0f1218] rounded-lg p-3 border border-gray-800 relative group/prompt transition-all hover:border-gray-600">
+                                    <div className="flex justify-between items-center mb-2">
+                                        <span className="text-[9px] font-bold text-indigo-400 uppercase flex items-center gap-1">
+                                            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 4v16M17 4v16M3 8h4m10 0h4M3 12h18M3 16h4m10 0h4M4 20h16a1 1 0 001-1V5a1 1 0 00-1-1H4a1 1 0 00-1 1v14a1 1 0 001 1z" /></svg>
+                                            Text-to-Video
+                                        </span>
+                                        <button 
+                                            onClick={() => navigator.clipboard.writeText(scene.textToVideoPrompt || "")}
+                                            className="text-[9px] font-bold text-gray-600 hover:text-white uppercase transition-colors"
+                                        >
+                                            Copy
+                                        </button>
+                                    </div>
+                                    <textarea
+                                        value={scene.textToVideoPrompt || ""}
+                                        onChange={(e) => onUpdateSingleScene({ ...scene, textToVideoPrompt: e.target.value })}
+                                        placeholder="Full detailed scene description for Sora/Kling..."
+                                        className="w-full bg-transparent text-xs text-gray-400 font-mono focus:outline-none resize-none h-28 custom-scrollbar leading-relaxed"
+                                    />
+                                </div>
+                             )}
 
                          </div>
                       </div>
 
                       {/* Right: Image Canvas (Only in Standard Mode) */}
-                      {viewMode === 'standard' && (
+                      {viewMode === 'standard' && generationType === 'visual' && (
                         <div className="lg:w-7/12 bg-black relative h-[350px] lg:h-[450px] overflow-hidden flex flex-row">
                             {scene.imageUrl ? (
                                 <>
@@ -1220,8 +1333,35 @@ export const Step3Images: React.FC<Props> = ({
         defaultInstruction={generateSystemInstruction(
           editableAestheticPrompt,
           activePacing,
+          generationType || 'visual',
           (durationMode === 'custom' && customDuration) ? parseInt(customDuration, 10) : undefined
         )}
+      />
+
+      <InstructionModal
+        isOpen={isAnalyzeVisualsModalOpen}
+        onClose={() => setIsAnalyzeVisualsModalOpen(false)}
+        title="Auto-Configure from Script"
+        instruction={customAnalyzeVisualsInstruction}
+        onInstructionChange={setCustomAnalyzeVisualsInstruction}
+        defaultInstruction={DEFAULT_ANALYZE_VISUALS_INSTRUCTION}
+      />
+
+      <PresetOverlay 
+        isOpen={isPresetOverlayOpen}
+        onClose={() => setIsPresetOverlayOpen(false)}
+        currentInstructions={{
+          "ALL": aiDirectionAll,
+          ...aiDirectionStages
+        }}
+        onApplyPreset={(inst) => {
+          if (inst.ALL !== undefined) setAiDirectionAll(inst.ALL);
+          const stages = { ...aiDirectionStages };
+          ['STAGE 1', 'STAGE 2', 'STAGE 3', 'STAGE 4'].forEach(s => {
+            if (inst[s] !== undefined) stages[s] = inst[s];
+          });
+          setAiDirectionStages(stages);
+        }}
       />
 
     </div>

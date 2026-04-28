@@ -211,12 +211,73 @@ async function startServer() {
     }
   });
 
+  app.get('/api/voices', async (req, res) => {
+    const { provider, model } = req.query;
+
+    try {
+      let voices = [];
+      
+      if (provider === 'google') {
+        voices = [
+          { name: "Puck", gender: "Male", traits: "Deep & Resonant", id: "Puck", avatarClass: "bg-gradient-to-br from-indigo-500 via-purple-500 to-indigo-800" },
+          { name: "Charon", gender: "Male", traits: "Deep & Serious", id: "Charon", avatarClass: "bg-gradient-to-br from-gray-700 via-gray-800 to-black" },
+          { name: "Fenrir", gender: "Male", traits: "Aggressive & Intense", id: "Fenrir", avatarClass: "bg-gradient-to-br from-red-500 via-orange-600 to-red-800" },
+          { name: "Kore", gender: "Female", traits: "Soothing & Calm", id: "Kore", avatarClass: "bg-gradient-to-br from-pink-300 via-rose-400 to-pink-500" },
+          { name: "Aoede", gender: "Female", traits: "Higher Pitch & Clear", id: "Aoede", avatarClass: "bg-gradient-to-br from-teal-300 via-emerald-400 to-teal-600" }
+        ];
+      } else if (provider === 'openrouter') {
+        // Mock voices for OpenRouter if it had TTS
+        voices = [
+          { name: "Echo", gender: "Neutral", traits: "Electronic & Clean", id: "echo", avatarClass: "bg-gradient-to-br from-cyan-500 to-blue-500" },
+          { name: "Nova", gender: "Female", traits: "Energetic & Modern", id: "nova", avatarClass: "bg-gradient-to-br from-purple-500 to-pink-500" }
+        ];
+      } else {
+        voices = [
+          { name: "Default Voice", gender: "Neutral", traits: "Standard", id: "default", avatarClass: "bg-gray-600" }
+        ];
+      }
+
+      res.json({ success: true, voices });
+    } catch (err: any) {
+      console.error(`Error fetching voices:`, err.message);
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
   app.post('/api/ai', async (req, res) => {
-    const { provider, model, prompt, task_type } = req.body;
+    const { provider, model, prompt, messages, system_instruction, task_type } = req.body;
 
     try {
       let response;
       let output;
+
+      // Handle both single prompt and multi-turn messages
+      const chatMessages = messages || [{ role: 'user', content: prompt }];
+      
+      // Map roles for compatibility and ensure strictly allowed values
+      const normalizedMessages = chatMessages.map(m => {
+        let role = m.role;
+        if (role === 'model' || role === 'ai' || role === 'bot') role = 'assistant';
+        // Extreme fallback: if it's not a standard role, default to user to prevent API crashes
+        if (role !== 'system' && role !== 'user' && role !== 'assistant') role = 'user';
+        
+        return {
+          role,
+          content: m.content || ''
+        };
+      });
+
+      // Some providers support system instructions differently. 
+      // We'll prepend it if provided and not already there for simplicity in this proxy.
+      const formattedMessages = [...normalizedMessages];
+      if (system_instruction && formattedMessages.length > 0) {
+        if (provider === 'openrouter' || provider === 'groq' || provider === 'snova' || provider === 'deepseek') {
+          formattedMessages.unshift({ role: 'system', content: system_instruction });
+        } else {
+          // Fallback: prepend to first user message
+          formattedMessages[0].content = `${system_instruction}\n\n${formattedMessages[0].content}`;
+        }
+      }
 
       if (task_type === 'image') {
         throw new Error('Image generation not supported for this provider yet');
@@ -227,8 +288,10 @@ async function startServer() {
           case 'huggingface':
             const hfKey = process.env.HF_TOKEN;
             if (!hfKey) throw new Error('HF_TOKEN is not configured');
+            // Hugging Face inference API usually expects a single string for simple models
+            const hfPrompt = formattedMessages.map(m => `${m.role}: ${m.content}`).join('\n');
             response = await axios.post(`https://api-inference.huggingface.co/models/${model}`, 
-              { inputs: prompt }, 
+              { inputs: hfPrompt }, 
               { headers: { Authorization: `Bearer ${hfKey}` } }
             );
             output = response.data?.[0]?.generated_text || response.data;
@@ -238,7 +301,7 @@ async function startServer() {
             const orKey = process.env.OPENROUTER_KEY;
             if (!orKey) throw new Error('OPENROUTER_KEY is not configured');
             response = await axios.post(`https://openrouter.ai/api/v1/chat/completions`, 
-              { model, messages: [{ role: 'user', content: prompt }] }, 
+              { model, messages: formattedMessages }, 
               { headers: { Authorization: `Bearer ${orKey}` } }
             );
             output = response.data?.choices?.[0]?.message?.content;
@@ -248,7 +311,7 @@ async function startServer() {
             const groqKey = process.env.GROQ_KEY;
             if (!groqKey) throw new Error('GROQ_KEY is not configured');
             response = await axios.post(`https://api.groq.com/openai/v1/chat/completions`, 
-              { model, messages: [{ role: 'user', content: prompt }] }, 
+              { model, messages: formattedMessages }, 
               { headers: { Authorization: `Bearer ${groqKey}` } }
             );
             output = response.data?.choices?.[0]?.message?.content;
@@ -258,7 +321,7 @@ async function startServer() {
             const snovaKey = process.env.SNOVA_KEY;
             if (!snovaKey) throw new Error('SNOVA_KEY is not configured');
             response = await axios.post(`https://api.sambanova.ai/v1/chat/completions`, 
-              { model, messages: [{ role: 'user', content: prompt }] }, 
+              { model, messages: formattedMessages }, 
               { headers: { Authorization: `Bearer ${snovaKey}` } }
             );
             output = response.data?.choices?.[0]?.message?.content;
@@ -268,7 +331,7 @@ async function startServer() {
             const dsKey = process.env.DEEPSEEK_KEY;
             if (!dsKey) throw new Error('DEEPSEEK_KEY is not configured');
             response = await axios.post(`https://api.deepseek.com/chat/completions`, 
-              { model, messages: [{ role: 'user', content: prompt }] }, 
+              { model, messages: formattedMessages }, 
               { headers: { Authorization: `Bearer ${dsKey}` } }
             );
             output = response.data?.choices?.[0]?.message?.content;

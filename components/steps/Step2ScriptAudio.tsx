@@ -1,9 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { VOICES } from '../../constants';
-import { base64PCMToWavBlob, DEFAULT_MUSIC_INSTRUCTION } from '../../services/geminiService';
+import { base64PCMToWavBlob, DEFAULT_MUSIC_INSTRUCTION, fetchVoices, Voice } from '../../services/geminiService';
 import { ScriptSettings } from '../../types';
 import { InstructionModal } from '../InstructionModal';
 import { AudioVisualizer } from '../AudioVisualizer';
+import { Loader2, Mic } from 'lucide-react';
 
 interface Props {
   script: string;
@@ -16,9 +16,13 @@ interface Props {
   isGeneratingAudio: boolean;
   onNext: () => void;
   isSegmenting?: boolean;
-  selectedVoiceName?: string | null; // New prop from App
+  selectedVoiceName?: string | null; 
   title?: string;
   
+  // Audio Config from Sidebar
+  audioProvider: string;
+  audioModel: string;
+
   // New props for music config
   musicPrompt: string;
   onMusicPromptChange: (prompt: string) => void;
@@ -37,9 +41,13 @@ export const Step2ScriptAudio: React.FC<Props> = ({
   script, durationStr, settings, onScriptChange, onRegenerateScript, 
   onGenerateAudio, audioBase64, isGeneratingAudio, onNext, isSegmenting,
   selectedVoiceName, title,
+  audioProvider, audioModel,
   musicPrompt, onMusicPromptChange, musicStyle, onMusicStyleChange, musicIntensity, onMusicIntensityChange, isGeneratingMusic, onGenerateMusicPrompt, isAdvancedMode
 }) => {
-  const [selectedVoice, setSelectedVoice] = useState(VOICES[0]);
+  const [voices, setVoices] = useState<Voice[]>([]);
+  const [selectedVoice, setSelectedVoice] = useState<Voice | null>(null);
+  const [isLoadingVoices, setIsLoadingVoices] = useState(false);
+  
   const [isVoiceDropdownOpen, setIsVoiceDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   
@@ -50,13 +58,34 @@ export const Step2ScriptAudio: React.FC<Props> = ({
   const [customMusicInstruction, setCustomMusicInstruction] = useState(DEFAULT_MUSIC_INSTRUCTION);
   const [isMusicModalOpen, setIsMusicModalOpen] = useState(false);
 
-  // Sync selected voice if provided by Auto Mode
+  // Load voices based on provider and model
   useEffect(() => {
-    if (selectedVoiceName) {
-      const voice = VOICES.find(v => v.name === selectedVoiceName);
+    const loadVoices = async () => {
+      setIsLoadingVoices(true);
+      try {
+        const v = await fetchVoices(audioProvider, audioModel);
+        setVoices(v);
+        if (v.length > 0) {
+            // Find existing selection or default to first
+            const current = v.find(x => x.name === selectedVoiceName) || v[0];
+            setSelectedVoice(current);
+        }
+      } catch (e) {
+        console.error("Failed to load voices", e);
+      } finally {
+        setIsLoadingVoices(false);
+      }
+    };
+    loadVoices();
+  }, [audioProvider, audioModel]);
+
+  // Sync selected voice if provided by Auto Mode OR from parent
+  useEffect(() => {
+    if (selectedVoiceName && voices.length > 0) {
+      const voice = voices.find(v => v.name === selectedVoiceName);
       if (voice) setSelectedVoice(voice);
     }
-  }, [selectedVoiceName]);
+  }, [selectedVoiceName, voices]);
 
   useEffect(() => {
     if (audioBase64) {
@@ -206,34 +235,52 @@ export const Step2ScriptAudio: React.FC<Props> = ({
         <div className="relative w-full md:w-64 shrink-0" ref={dropdownRef}>
            <button 
              onClick={() => setIsVoiceDropdownOpen(!isVoiceDropdownOpen)}
+             disabled={isLoadingVoices}
              className={`w-full bg-[#161b22] border text-white rounded-lg p-2 flex items-center justify-between transition-colors shadow-sm ${selectedVoiceName ? 'border-amber-500/50 ring-1 ring-amber-500/30' : 'border-gray-700 hover:border-gray-600'}`}
            >
-             <div className="flex items-center gap-3">
-               <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold text-white shadow-inner border border-white/10 ${selectedVoice.avatarClass || 'bg-gray-700'}`}>
-                 {selectedVoice.name[0]}
+             {isLoadingVoices ? (
+               <div className="flex items-center gap-3 px-2 py-1">
+                 <Loader2 className="w-5 h-5 animate-spin text-indigo-500" />
+                 <span className="text-xs uppercase font-bold text-gray-500">Loading Voices...</span>
                </div>
-               <div className="text-left">
-                 <div className="text-sm font-bold flex items-center gap-2">
-                    {selectedVoice.name}
-                    <span className={`text-[8px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wide border ${selectedVoice.gender === 'Male' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' : 'bg-pink-500/10 text-pink-400 border-pink-500/20'}`}>
-                      {selectedVoice.gender}
-                    </span>
-                    {selectedVoiceName && <span className="text-[9px] bg-amber-500 text-black px-1.5 py-0.5 rounded font-bold uppercase">AI Pick</span>}
+             ) : selectedVoice ? (
+               <div className="flex items-center gap-3">
+                 <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold text-white shadow-inner border border-white/10 ${selectedVoice.avatarClass || 'bg-gray-700'}`}>
+                   {selectedVoice.name[0]}
                  </div>
-                 <div className="text-[10px] text-gray-500 uppercase">{selectedVoice.traits}</div>
+                 <div className="text-left">
+                   <div className="text-sm font-bold flex items-center gap-2">
+                      {selectedVoice.name}
+                      <span className={`text-[8px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wide border ${selectedVoice.gender === 'Male' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' : 'bg-pink-500/10 text-pink-400 border-pink-500/20'}`}>
+                        {selectedVoice.gender}
+                      </span>
+                      {selectedVoiceName === selectedVoice.name && <span className="text-[9px] bg-amber-500 text-black px-1.5 py-0.5 rounded font-bold uppercase">AI Pick</span>}
+                   </div>
+                   <div className="text-[10px] text-gray-500 uppercase">{selectedVoice.traits}</div>
+                 </div>
                </div>
-             </div>
+             ) : (
+               <div className="flex items-center gap-3 px-2 py-1">
+                 <Mic className="w-5 h-5 text-gray-600" />
+                 <span className="text-xs uppercase font-bold text-gray-600">Select Voice</span>
+               </div>
+             )}
              <svg className={`w-4 h-4 text-gray-500 transition-transform ${isVoiceDropdownOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" /></svg>
            </button>
 
-           {isVoiceDropdownOpen && (
-             <div className="absolute top-full left-0 w-full mt-2 bg-[#161b22] border border-gray-700 rounded-lg shadow-2xl overflow-hidden z-20">
-               {VOICES.map((voice) => (
+           {isVoiceDropdownOpen && voices.length > 0 && (
+             <div className="absolute top-full left-0 w-full mt-2 bg-[#161b22] border border-gray-700 rounded-lg shadow-2xl overflow-hidden z-20 max-h-[300px] overflow-y-auto custom-scrollbar">
+               <div className="p-2 border-b border-gray-800 bg-gray-900/50">
+                 <p className="text-[9px] font-black italic uppercase text-indigo-400/70 tracking-tighter">
+                   {audioProvider.toUpperCase()} / {audioModel}
+                 </p>
+               </div>
+               {voices.map((voice) => (
                  <button
                    key={voice.id}
                    onClick={() => { setSelectedVoice(voice); setIsVoiceDropdownOpen(false); }}
                    className={`w-full flex items-center gap-3 p-3 text-left hover:bg-gray-800 transition-colors border-b border-gray-800/50 last:border-0
-                     ${selectedVoice.id === voice.id ? 'bg-gray-800' : ''}
+                     ${selectedVoice?.id === voice.id ? 'bg-gray-800' : ''}
                    `}
                  >
                     <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white shadow-sm border border-white/10 ${voice.avatarClass || 'bg-gray-700'}`}>
@@ -256,13 +303,13 @@ export const Step2ScriptAudio: React.FC<Props> = ({
 
         {/* Generate Button */}
         <button
-            onClick={() => onGenerateAudio(selectedVoice.name)}
-            disabled={isGeneratingAudio}
+            onClick={() => selectedVoice && onGenerateAudio(selectedVoice.name)}
+            disabled={isGeneratingAudio || !selectedVoice || isLoadingVoices}
             className={`md:w-auto w-full px-6 py-3 rounded-lg font-bold transition-all flex items-center justify-center gap-2 shadow-lg ${selectedVoiceName ? 'bg-amber-600 hover:bg-amber-500 text-white' : 'bg-indigo-600 hover:bg-indigo-500 text-white disabled:opacity-50'}`}
         >
             {isGeneratingAudio ? (
               <span className="flex items-center gap-2 text-sm">
-                 <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                 <Loader2 className="animate-spin h-4 w-4" />
                  Generating...
               </span>
             ) : (
@@ -383,7 +430,7 @@ export const Step2ScriptAudio: React.FC<Props> = ({
           >
             {isGeneratingMusic ? (
               <>
-                <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                <Loader2 className="animate-spin h-3 w-3" />
                 Generating...
               </>
             ) : "Generate Prompt"}

@@ -1,4 +1,7 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { motion, AnimatePresence } from 'motion/react';
+import { Settings, X, RotateCcw, Save } from 'lucide-react';
 
 interface Props {
   isOpen: boolean;
@@ -10,46 +13,86 @@ interface Props {
 }
 
 export const InstructionModal: React.FC<Props> = ({ isOpen, onClose, title, instruction, onInstructionChange, defaultInstruction }) => {
-  if (!isOpen) return null;
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in">
-      <div className="bg-[#161b22] border border-amber-500/50 rounded-xl w-full max-w-3xl shadow-2xl shadow-amber-900/20 flex flex-col overflow-hidden animate-slide-up">
-        <div className="p-4 border-b border-gray-800 flex justify-between items-center bg-[#0d1117]">
-          <h3 className="text-amber-500 font-bold uppercase tracking-widest text-sm flex items-center gap-2">
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-            Advanced AI Instructions: {title}
-          </h3>
-          <button onClick={onClose} className="text-gray-500 hover:text-white transition-colors">
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
-          </button>
-        </div>
-        <div className="p-4 bg-[#0d1117]">
-          <p className="text-xs text-gray-400 mb-3">
-            Modify the underlying system prompt for this AI feature. Leave empty or reset to default if you encounter errors.
-          </p>
-          <textarea
-            value={instruction}
-            onChange={(e) => onInstructionChange(e.target.value)}
-            className="w-full h-80 bg-[#161b22] border border-gray-700 rounded-lg p-4 text-sm text-amber-100/80 font-mono focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500/50 transition-all custom-scrollbar resize-none"
-            placeholder="Enter AI instructions here..."
-            spellCheck="false"
-          />
-        </div>
-        <div className="p-4 border-t border-gray-800 bg-[#0d1117] flex justify-between items-center">
-          <button 
-            onClick={() => onInstructionChange(defaultInstruction)}
-            className="text-xs text-gray-500 hover:text-amber-400 transition-colors underline"
-          >
-            Reset to Default
-          </button>
-          <button 
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
+  if (!mounted) return null;
+
+  return createPortal(
+    <AnimatePresence>
+      {isOpen && (
+        <>
+          {/* Subtle backdrop */}
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] bg-black/20 backdrop-blur-sm pointer-events-auto"
             onClick={onClose}
-            className="px-6 py-2 bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs uppercase tracking-wider rounded-lg transition-all shadow-lg shadow-amber-900/20"
+          />
+
+          {/* Floating Drawer / Window */}
+          <motion.div 
+            initial={{ x: '100%', opacity: 0, scale: 0.95 }}
+            animate={{ x: 0, opacity: 1, scale: 1 }}
+            exit={{ x: '100%', opacity: 0, scale: 0.95 }}
+            transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+            className="fixed top-4 bottom-4 right-4 z-[101] w-[500px] max-w-[calc(100vw-32px)] bg-[#0d1117]/95 backdrop-blur-2xl border border-amber-500/30 rounded-2xl shadow-2xl shadow-amber-900/20 flex flex-col overflow-hidden pointer-events-auto"
           >
-            Save & Close
-          </button>
-        </div>
-      </div>
-    </div>
+            {/* Header */}
+            <div className="p-5 border-b border-gray-800 flex justify-between items-center bg-gradient-to-r from-amber-500/10 to-transparent">
+              <h3 className="text-amber-500 font-bold uppercase tracking-widest text-sm flex items-center gap-2">
+                <Settings className="w-4 h-4" />
+                {title} Configuration
+              </h3>
+              <button 
+                onClick={onClose} 
+                className="text-gray-500 hover:text-white transition-colors p-1.5 hover:bg-gray-800 rounded-lg"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="flex-1 overflow-y-auto custom-scrollbar p-5 flex flex-col gap-4">
+              <div className="bg-[#161b22] border border-gray-800 rounded-xl p-4">
+                <p className="text-xs text-gray-400 leading-relaxed font-medium">
+                  Modify the underlying system prompt for this AI feature. Leave empty or reset to default if you encounter errors.
+                </p>
+              </div>
+
+              <div className="flex-1 flex flex-col relative min-h-[300px]">
+                <textarea
+                  value={instruction}
+                  onChange={(e) => onInstructionChange(e.target.value)}
+                  className="absolute inset-0 w-full h-full bg-[#161b22] border border-gray-800 rounded-xl p-5 text-[13px] text-amber-100/90 font-mono focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500/50 transition-all custom-scrollbar resize-none leading-relaxed"
+                  placeholder="Enter AI instructions here..."
+                  spellCheck="false"
+                />
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="p-5 border-t border-gray-800 bg-[#0d1117] flex justify-between items-center gap-4">
+              <button 
+                onClick={() => onInstructionChange(defaultInstruction)}
+                className="text-xs text-gray-400 hover:text-amber-400 transition-colors flex items-center gap-1.5 font-medium px-3 py-2 rounded-lg hover:bg-gray-800"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                Reset Default
+              </button>
+              <button 
+                onClick={onClose}
+                className="px-5 py-2.5 bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs uppercase tracking-wider rounded-xl transition-all shadow-lg shadow-amber-900/20 flex items-center gap-2 active:scale-95"
+              >
+                <Save className="w-4 h-4" />
+                Save & Close
+              </button>
+            </div>
+          </motion.div>
+        </>
+      )}
+    </AnimatePresence>,
+    document.body
   );
 };

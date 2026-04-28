@@ -203,14 +203,7 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ currentState, on
           {/* User Profile Card */}
           <div className="bg-gradient-to-br from-gray-900/80 via-[#161b22]/90 to-indigo-900/20 backdrop-blur-md rounded-xl p-3 border border-gray-800/50 flex items-center gap-3 group transition-all hover:border-indigo-500/40 shadow-[inset_0_0_20px_rgba(0,0,0,0.4)]">
             <div className="relative w-11 h-11 flex items-center justify-center">
-              {/* RGB Rotating Ring */}
-              <div className="absolute inset-0 rounded-full animate-rotate-gradient" 
-                style={{ 
-                  background: 'conic-gradient(from 0deg, #ff0000, #ff7f00, #ffff00, #00ff00, #00ffff, #0000ff, #8b00ff, #ff0000)',
-                  filter: 'blur(1px)'
-                }} 
-              />
-              {/* Inner Dark Mask to create the ring effect */}
+              {/* Inner Dark Mask to create the ring effect (optional now, but kept for sizing) */}
               <div className="absolute inset-[2px] bg-[#0d1117] rounded-full z-10" />
               
               {/* Profile Image */}

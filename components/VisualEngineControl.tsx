@@ -10,6 +10,7 @@ interface VisualEngineControlProps {
   pacing: string;
   duration: string;
   canvasSize: string;
+  generationMode: 'visual' | 't2v';
   scenes: Scene[];
   onUpdateScenes: (scenes: Scene[]) => void;
 }
@@ -60,7 +61,7 @@ The model must convert each image prompt into a controlled motion prompt for ima
 Motion must be derived from the existing image: small actions like hand movement, screen changes, fluid motion, environmental shifts. Avoid chaos, fast cuts, or unrealistic transitions. The motion must feel physically believable and stable.
 Each prompt must include clear temporal behavior (~2–4 seconds) and describe how the scene evolves. Movement must support the idea, not distract from it. Avoid adding new objects, characters, or environments.
 Continuity must be preserved across segments. The model must ensure that motion logically follows previous states.
-OUTPUT FORMAT: Update the input JSON array by adding { imageToVideoPrompt } to each segment.`,
+OUTPUT FORMAT: Update the input JSON array by adding { textToVideoPrompt, imageToVideoPrompt } to each segment.`,
   }
 ];
 
@@ -72,6 +73,7 @@ export const VisualEngineControl: React.FC<VisualEngineControlProps> = ({
   pacing,
   duration,
   canvasSize,
+  generationMode,
   scenes,
   onUpdateScenes
 }) => {
@@ -80,6 +82,27 @@ export const VisualEngineControl: React.FC<VisualEngineControlProps> = ({
   );
   const [activeStageId, setActiveStageId] = useState<number>(1);
   const [showRaw, setShowRaw] = useState(false);
+  const [isAutoGenerating, setIsAutoGenerating] = useState(false);
+
+  React.useEffect(() => {
+    if (isAutoGenerating) {
+      const currentStage = stages.find(s => s.id === activeStageId);
+      if (currentStage && currentStage.status === 'complete' && activeStageId < 4) {
+        const timer = setTimeout(() => {
+          handleNext();
+        }, 500);
+        return () => clearTimeout(timer);
+      }
+      
+      if (currentStage && currentStage.status === 'complete' && activeStageId === 4) {
+        setIsAutoGenerating(false);
+      }
+      
+      if (currentStage && currentStage.status === 'error') {
+        setIsAutoGenerating(false);
+      }
+    }
+  }, [isAutoGenerating, stages, activeStageId]);
 
   const getSystemInstruction = (stageId: number) => {
     const stage = STAGES_CONFIG.find(s => s.id === stageId);
@@ -105,6 +128,7 @@ export const VisualEngineControl: React.FC<VisualEngineControlProps> = ({
     instruction += `- Pacing: ${pacing}\n`;
     instruction += `- Script Duration: ${duration}s\n`;
     instruction += `- Canvas Size: ${canvasSize}\n`;
+    instruction += `- Generation Mode: ${generationMode === 't2v' ? 'Video' : 'Image'}\n`;
     
     instruction += `\nIMPORTANT: Return ONLY valid JSON. The output must be an array of scene objects.`;
     
@@ -189,19 +213,37 @@ export const VisualEngineControl: React.FC<VisualEngineControlProps> = ({
     runStage(activeStageId, input);
   };
 
+  const handleToggleAutoGenerate = () => {
+    if (isAutoGenerating) {
+      setIsAutoGenerating(false);
+      return;
+    }
+    
+    setIsAutoGenerating(true);
+    
+    const currentStage = stages.find(s => s.id === activeStageId);
+    if (currentStage) {
+      if (currentStage.status === 'idle') {
+        handleGenerate();
+      } else if (currentStage.status === 'complete' && activeStageId < 4) {
+        handleNext();
+      }
+    }
+  };
+
   const activeStage = stages.find(s => s.id === activeStageId);
 
   return (
     <div className="w-full bg-[#111827] border border-gray-800 rounded-xl overflow-hidden shadow-2xl mt-8 animate-in fade-in slide-in-from-bottom-4">
-      <div className="p-4 border-b border-gray-800 bg-[#0d1117] flex justify-between items-center">
-        <h3 className="text-sm font-bold text-gray-300 uppercase tracking-widest flex items-center gap-2">
+      <div className="p-4 border-b border-gray-800 bg-[#0d1117] flex flex-col gap-4">
+        <h3 className="w-full text-sm font-bold text-gray-300 uppercase tracking-widest flex items-center gap-2">
           <svg className="w-4 h-4 text-indigo-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
           </svg>
           Visual Engine Control
         </h3>
         
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2 w-full items-center">
           <button
             onClick={handleGenerate}
             disabled={!script.trim() || stages[0].status === 'loading'}
@@ -222,6 +264,30 @@ export const VisualEngineControl: React.FC<VisualEngineControlProps> = ({
             className="px-4 py-1.5 bg-green-600 hover:bg-green-500 disabled:opacity-50 text-white text-[10px] font-bold uppercase tracking-wider rounded transition-colors"
           >
             Next
+          </button>
+          
+          <div className="w-px h-6 bg-gray-700 mx-2 hidden sm:block"></div>
+          
+          <button
+            onClick={handleToggleAutoGenerate}
+            disabled={!script.trim() || activeStageId === 4 && activeStage?.status === 'complete'}
+            className={`px-4 py-1.5 flex items-center gap-2 disabled:opacity-50 text-white text-[10px] font-bold uppercase tracking-wider rounded transition-colors ${
+              isAutoGenerating 
+                ? 'bg-amber-600 hover:bg-amber-500 shadow-[0_0_10px_rgba(217,119,6,0.5)]' 
+                : 'bg-purple-600 hover:bg-purple-500'
+            }`}
+          >
+            {isAutoGenerating ? (
+              <>
+                <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+                Pause Auto
+              </>
+            ) : (
+              <>
+                <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                Auto Generate
+              </>
+            )}
           </button>
         </div>
       </div>

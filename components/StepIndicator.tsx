@@ -19,27 +19,9 @@ const steps = [
 
 export const StepIndicator: React.FC<StepIndicatorProps> = ({ currentStep, onStepClick, isAutonomousMode = false }) => {
   return (
-    <div className="w-full mb-8 relative p-[3px] rounded-2xl overflow-hidden group">
-      {/* RGB Border & Glow Layer (Fixed Implementation) */}
-      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-        {/* Outer Soft Glow */}
-        <div className="w-[300%] aspect-square bg-[conic-gradient(from_0deg,#ff0000,#ffff00,#00ff00,#00ffff,#0000ff,#ff00ff,#ff0000)] animate-rotate-gradient opacity-60 blur-[60px]" />
-        {/* Inner Intense Glow */}
-        <div className="absolute w-[300%] aspect-square bg-[conic-gradient(from_0deg,#ff0000,#ffff00,#00ff00,#00ffff,#0000ff,#ff00ff,#ff0000)] animate-rotate-gradient opacity-80 blur-[15px]" />
-        {/* Sharp Border */}
-        <div className="absolute w-[300%] aspect-square bg-[conic-gradient(from_0deg,#ff0000,#ffff00,#00ff00,#00ffff,#0000ff,#ff00ff,#ff0000)] animate-rotate-gradient opacity-100" />
-      </div>
+    <div className="w-full mb-8 relative group">
       
-      {/* Dark Green Shining Background Layer (Middle) */}
-      <div className="absolute inset-[3px] rounded-[13px] bg-[#022c22] overflow-hidden shadow-[inset_0_0_60px_rgba(0,0,0,0.8)]">
-        <motion.div 
-          animate={{ x: ['-150%', '150%'] }}
-          transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
-          className="absolute inset-0 bg-gradient-to-r from-transparent via-emerald-400/30 to-transparent -skew-x-12"
-        />
-      </div>
-      
-      <div className="relative bg-[#0B0F19]/70 backdrop-blur-md rounded-[13px] p-4 overflow-x-auto custom-scrollbar border border-white/5 shadow-2xl">
+      <div className="relative bg-[#161b22]/80 backdrop-blur-md rounded-2xl p-4 overflow-x-auto custom-scrollbar border border-gray-800 shadow-xl">
         <div className="flex justify-between items-start relative min-w-[320px] px-2 pb-6">
           {steps.map((s, index) => {
             const isActive = s.id === currentStep;

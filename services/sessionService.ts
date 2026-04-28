@@ -65,7 +65,10 @@ export const saveSessionToFirebase = async (sessionId: string, name: string, app
   
   const path = `sessions/${sessionId}`;
   try {
-    const serializedState = JSON.stringify(appState);
+    // Strip audioBase64 to save cloud storage space
+    const stateToSave = { ...appState, audioBase64: null };
+    const serializedState = JSON.stringify(stateToSave);
+    
     if (serializedState.length > 1000000) {
       throw new Error("Session is too large to save. Try clearing some generated images or audio.");
     }

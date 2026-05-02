@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { Loader2, Check, Wand2, Copy, ChevronDown, ChevronUp, FolderOpen, Save } from 'lucide-react';
 import { Scene } from '../../types';
-import { segmentScript, generateSceneImage, generateSystemInstruction, analyzeScriptForVisuals, DEFAULT_ANALYZE_VISUALS_INSTRUCTION } from '../../services/geminiService';
+import { segmentScript, generateSceneImage, generateSystemInstruction, analyzeScriptForVisuals, DEFAULT_ANALYZE_VISUALS_INSTRUCTION, DEFAULT_PROMPT_ENGINEERING_RULES } from '../../services/geminiService';
 import { Preset, savePresetToFirebase, listUserPresets, deletePresetFromFirebase } from '../../services/presetService';
 import { InstructionModal } from '../InstructionModal';
 import { VisualEngineControl, STAGES_CONFIG } from '../VisualEngineControl';
@@ -251,26 +251,11 @@ export const Step3Images: React.FC<Props> = ({
   
   // viewMode: 'standard' (Prompt + Image) or 'prompts' (Text Prompts Only)
   const [viewMode, setViewMode] = useState<'standard' | 'prompts'>('standard');
-  const [generationType, setGenerationType] = useState<'visual' | 't2v' | null>(null);
   
   // Sync local script if global script changes (e.g. navigation back and forth)
   useEffect(() => {
     setLocalScript(initialScript);
   }, [initialScript]);
-
-  // Determine initial generation type based on existing scenes data
-  useEffect(() => {
-    if (scenes.length > 0 && generationType === null) {
-        // Heuristic: If we have textToVideoPrompt but no imagePrompt (or mostly), it's T2V.
-        const isT2V = scenes.some(s => !!s.textToVideoPrompt && !s.imagePrompt);
-        setGenerationType(isT2V ? 't2v' : 'visual');
-        
-        // If it looks like T2V, default to prompts view
-        if (isT2V) {
-            setViewMode('prompts');
-        }
-    }
-  }, [scenes, generationType]);
 
   // Configuration
   const [activeRatio, setActiveRatio] = useState("9:16");
@@ -309,6 +294,12 @@ export const Step3Images: React.FC<Props> = ({
     });
     return defaults;
   });
+
+  const [stageInstructions, setStageInstructions] = useState<Record<string, string>>(defaultInstructions);
+  const [editingStageInst, setEditingStageInst] = useState<string | null>(null);
+
+  const [promptEngineeringRules, setPromptEngineeringRules] = useState(DEFAULT_PROMPT_ENGINEERING_RULES);
+  const [isPromptEngineeringModalOpen, setIsPromptEngineeringModalOpen] = useState(false);
 
   // Sync aiDirectionAll with global aiDirection
   useEffect(() => {
@@ -412,7 +403,7 @@ export const Step3Images: React.FC<Props> = ({
 
   const handleToggleAdvancedMode = () => {
     const durationVal = (durationMode === 'custom' && customDuration) ? parseInt(customDuration, 10) : undefined;
-    const defaultInstruction = generateSystemInstruction(editableAestheticPrompt, activePacing, generationType || 'visual', durationVal);
+    const defaultInstruction = generateSystemInstruction(editableAestheticPrompt, activePacing, promptEngineeringRules, durationVal);
     setCustomSystemInstruction(defaultInstruction);
     setIsVisualModalOpen(true);
   };
@@ -469,7 +460,7 @@ export const Step3Images: React.FC<Props> = ({
 
   const isLongScript = localScript.length > 8000;
 
-  const handleGeneratePlan = async (type: 'visual' | 't2v', view: 'standard' | 'prompts') => {
+  const handleGeneratePlan = async (view: 'standard' | 'prompts') => {
     if (!localScript.trim()) return;
     
     if (isLongScript) {
@@ -488,7 +479,6 @@ export const Step3Images: React.FC<Props> = ({
 
     setIsGeneratingPlan(true);
     setViewMode(view);
-    setGenerationType(type);
     
     // Clear immediately to show feedback
     onUpdateScenes([]); 
@@ -501,7 +491,7 @@ export const Step3Images: React.FC<Props> = ({
         localScript, 
         editableAestheticPrompt, 
         activePacing, 
-        type, 
+        promptEngineeringRules, 
         durationVal, 
         aiDirectionAll,
         isAdvancedModeGlobal ? customSystemInstruction : undefined,
@@ -572,7 +562,6 @@ export const Step3Images: React.FC<Props> = ({
   const handleClearScenes = () => {
     if (window.confirm("Clear all scenes and images?")) {
         onUpdateScenes([]);
-        setGenerationType(null);
         setLastGeneratedConfig(null);
     }
   };
@@ -613,10 +602,10 @@ export const Step3Images: React.FC<Props> = ({
 
   const completedCount = scenes.filter(s => s.imageUrl).length;
   // All complete if we have images for all scenes OR if we are in T2V mode (no images to generate)
-  const isAllComplete = scenes.length > 0 && (generationType === 't2v' || completedCount === scenes.length);
+  const isAllComplete = scenes.length > 0 && completedCount === scenes.length;
   const allImagesReady = scenes.length > 0 && completedCount === scenes.length;
   const isPlanReady = scenes.length > 0;
-  const progressPercent = isPlanReady && generationType === 'visual' ? Math.round((completedCount / scenes.length) * 100) : 0;
+  const progressPercent = isPlanReady ? Math.round((completedCount / scenes.length) * 100) : 0;
   
   const currentAestheticDesc = [...AESTHETICS, ...generatedStyles].find(a => selectedAesthetics.includes(a.label))?.desc;
 
@@ -829,6 +818,14 @@ export const Step3Images: React.FC<Props> = ({
                 06 — AI Direction
               </div>
               <button 
+                onClick={() => setIsPromptEngineeringModalOpen(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-teal-600/10 border border-teal-500/20 text-teal-400 text-[9px] font-bold uppercase tracking-wider hover:bg-teal-600 hover:text-white transition-all group"
+                title="Edit Prompt Engineering Rules"
+              >
+                <Wand2 className="w-3.5 h-3.5 group-hover:scale-110 transition-transform" />
+                Prompt Rules
+              </button>
+              <button 
                 onClick={() => setIsPresetOverlayOpen(true)}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600/10 border border-indigo-500/20 text-indigo-400 text-[9px] font-bold uppercase tracking-wider hover:bg-indigo-600 hover:text-white transition-all group"
                 title="Manage Presets"
@@ -891,7 +888,13 @@ export const Step3Images: React.FC<Props> = ({
                  <div className="flex items-center justify-between gap-2 mb-1">
                    <div className="flex items-center gap-2">
                      <div className="w-1 h-1 rounded-full bg-indigo-400"></div>
-                     <span className="text-[8px] font-bold uppercase tracking-widest text-indigo-400/70">Default Backbone (Mandatory)</span>
+                     <span className="text-[8px] font-bold uppercase tracking-widest text-indigo-400/70">Stage Protocol (Mandatory Core)</span>
+                     <button 
+                       onClick={() => setEditingStageInst(activeDirectionTab)}
+                       className="ml-2 px-2 py-0.5 rounded bg-indigo-600/20 text-indigo-300 hover:bg-indigo-600/40 hover:text-white text-[8px] font-bold uppercase tracking-wider transition-colors border border-indigo-500/30"
+                     >
+                       Edit
+                     </button>
                    </div>
                    <button 
                      onClick={() => setIsBackboneExpanded(!isBackboneExpanded)}
@@ -901,8 +904,8 @@ export const Step3Images: React.FC<Props> = ({
                    </button>
                  </div>
                  {isBackboneExpanded && (
-                   <p className="text-[10px] text-gray-400 italic leading-relaxed pt-1">
-                     {defaultInstructions[activeDirectionTab]}
+                   <p className="text-[10px] text-gray-400 italic leading-relaxed pt-1 whitespace-pre-wrap">
+                     {stageInstructions[activeDirectionTab] || defaultInstructions[activeDirectionTab]}
                    </p>
                  )}
                </div>
@@ -947,7 +950,8 @@ export const Step3Images: React.FC<Props> = ({
         pacing={activePacing}
         duration={durationMode === 'custom' ? customDuration : 'auto'}
         canvasSize={activeRatio}
-        generationMode={generationType || 'visual'}
+        promptEngineeringRules={promptEngineeringRules}
+        stageInstructions={stageInstructions}
         scenes={scenes}
         onUpdateScenes={onUpdateScenes}
       />
@@ -957,7 +961,7 @@ export const Step3Images: React.FC<Props> = ({
         <div className="space-y-6 pt-10 border-t border-gray-800/50 animate-slide-up">
            
            <h3 className="text-3xl font-extrabold text-white tracking-tight mb-8">
-             {generationType === 't2v' ? 'Text-to-Video Plan' : 'Visual Storyboard'}
+             Visual Storyboard
            </h3>
 
            {/* GENERATE ALL / PROGRESS BAR */}
@@ -979,7 +983,7 @@ export const Step3Images: React.FC<Props> = ({
                  </div>
 
                  {/* Progress Bar (Only visible in Visual Standard Mode) */}
-                 {viewMode === 'standard' && generationType === 'visual' && (
+                 {viewMode === 'standard' && (
                     <div className="flex-1 w-full max-w-md">
                         <div className="flex justify-between mb-2 text-[10px] font-bold uppercase tracking-widest text-gray-500">
                         <span>Rendering Progress</span>
@@ -991,12 +995,12 @@ export const Step3Images: React.FC<Props> = ({
                     </div>
                  )}
                  {/* Spacer for Prompts mode */}
-                 {(viewMode === 'prompts' || generationType === 't2v') && <div className="flex-1"></div>}
+                 {viewMode === 'prompts' && <div className="flex-1"></div>}
 
                  {/* Buttons */}
                  <div className="flex items-center gap-3">
                     {/* Generate All Button (Only Standard Mode) */}
-                    {viewMode === 'standard' && generationType === 'visual' && (
+                    {viewMode === 'standard' && (
                         <button
                             onClick={toggleAutoGenerate}
                             disabled={allImagesReady}
@@ -1030,7 +1034,7 @@ export const Step3Images: React.FC<Props> = ({
 
                     {/* Download All Button */}
                     {/* Only useful if images exist */}
-                    {viewMode === 'standard' && generationType === 'visual' && (
+                    {viewMode === 'standard' && (
                         <button
                         onClick={handleDownloadAll}
                         disabled={completedCount === 0}
@@ -1051,7 +1055,7 @@ export const Step3Images: React.FC<Props> = ({
               </div>
               
               {/* Info text */}
-              {viewMode === 'standard' && generationType === 'visual' && (
+              {viewMode === 'standard' && (
                 <div className="mt-4 text-center md:text-right">
                     <p className="text-[10px] text-gray-500 uppercase tracking-wide">
                     *Generates images sequentially (one by one) to ensure quality.
@@ -1133,10 +1137,9 @@ export const Step3Images: React.FC<Props> = ({
                          </div>
 
                          {/* PROMPT GRIDS - ADAPTIVE */}
-                         <div className={`grid gap-4 ${viewMode === 'prompts' && generationType === 'visual' ? 'md:grid-cols-2' : 'grid-cols-1'}`}>
+                         <div className={`grid gap-4 ${viewMode === 'prompts' ? 'md:grid-cols-2' : 'grid-cols-1'}`}>
                              
-                             {/* 1. Visual Prompt (Image Gen) - Only show if mode is VISUAL */}
-                             {generationType === 'visual' && (
+                             {/* 1. Visual Prompt (Image Gen) */}
                                 <div className="bg-[#0f1218] rounded-lg p-3 border border-gray-800 relative group/prompt transition-all hover:border-gray-600">
                                     <div className="flex justify-between items-center mb-2">
                                     <span className="text-[9px] font-bold text-gray-500 uppercase flex items-center gap-1">
@@ -1156,10 +1159,8 @@ export const Step3Images: React.FC<Props> = ({
                                     className="w-full bg-transparent text-xs text-gray-400 font-mono focus:outline-none resize-none h-24 custom-scrollbar leading-relaxed"
                                     />
                                 </div>
-                             )}
 
-                             {/* 2. Image to Video Prompt - Only show if mode is VISUAL */}
-                             {generationType === 'visual' && (
+                             {/* 2. Image to Video Prompt */}
                                 <div className="bg-[#0f1218] rounded-lg p-3 border border-gray-800 relative group/prompt transition-all hover:border-gray-600">
                                     <div className="flex justify-between items-center mb-2">
                                         <span className="text-[9px] font-bold text-gray-500 uppercase flex items-center gap-1">
@@ -1180,37 +1181,14 @@ export const Step3Images: React.FC<Props> = ({
                                         className="w-full bg-transparent text-xs text-gray-400 font-mono focus:outline-none resize-none h-24 custom-scrollbar leading-relaxed"
                                     />
                                 </div>
-                             )}
 
-                             {/* 3. Text to Video Prompt - Only show if mode is T2V */}
-                             {generationType === 't2v' && (
-                                <div className="bg-[#0f1218] rounded-lg p-3 border border-gray-800 relative group/prompt transition-all hover:border-gray-600">
-                                    <div className="flex justify-between items-center mb-2">
-                                        <span className="text-[9px] font-bold text-indigo-400 uppercase flex items-center gap-1">
-                                            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 4v16M17 4v16M3 8h4m10 0h4M3 12h18M3 16h4m10 0h4M4 20h16a1 1 0 001-1V5a1 1 0 00-1-1H4a1 1 0 00-1 1v14a1 1 0 001 1z" /></svg>
-                                            Text-to-Video
-                                        </span>
-                                        <button 
-                                            onClick={() => navigator.clipboard.writeText(scene.textToVideoPrompt || "")}
-                                            className="text-[9px] font-bold text-gray-600 hover:text-white uppercase transition-colors"
-                                        >
-                                            Copy
-                                        </button>
-                                    </div>
-                                    <textarea
-                                        value={scene.textToVideoPrompt || ""}
-                                        onChange={(e) => onUpdateSingleScene({ ...scene, textToVideoPrompt: e.target.value })}
-                                        placeholder="Full detailed scene description for Sora/Kling..."
-                                        className="w-full bg-transparent text-xs text-gray-400 font-mono focus:outline-none resize-none h-28 custom-scrollbar leading-relaxed"
-                                    />
-                                </div>
-                             )}
+                             {/* 3. Text to Video Prompt - Removed */}
 
                          </div>
                       </div>
 
                       {/* Right: Image Canvas (Only in Standard Mode) */}
-                      {viewMode === 'standard' && generationType === 'visual' && (
+                      {viewMode === 'standard' && (
                         <div className="lg:w-7/12 bg-black relative h-[350px] lg:h-[450px] overflow-hidden flex flex-row">
                             {scene.imageUrl ? (
                                 <>
@@ -1333,7 +1311,7 @@ export const Step3Images: React.FC<Props> = ({
         defaultInstruction={generateSystemInstruction(
           editableAestheticPrompt,
           activePacing,
-          generationType || 'visual',
+          promptEngineeringRules,
           (durationMode === 'custom' && customDuration) ? parseInt(customDuration, 10) : undefined
         )}
       />
@@ -1345,6 +1323,24 @@ export const Step3Images: React.FC<Props> = ({
         instruction={customAnalyzeVisualsInstruction}
         onInstructionChange={setCustomAnalyzeVisualsInstruction}
         defaultInstruction={DEFAULT_ANALYZE_VISUALS_INSTRUCTION}
+      />
+
+      <InstructionModal
+        isOpen={isPromptEngineeringModalOpen}
+        onClose={() => setIsPromptEngineeringModalOpen(false)}
+        title="Prompt Engineering Rules"
+        instruction={promptEngineeringRules}
+        onInstructionChange={setPromptEngineeringRules}
+        defaultInstruction={DEFAULT_PROMPT_ENGINEERING_RULES}
+      />
+
+      <InstructionModal
+        isOpen={editingStageInst !== null}
+        onClose={() => setEditingStageInst(null)}
+        title={`${editingStageInst} Protocol`}
+        instruction={editingStageInst ? stageInstructions[editingStageInst] : ""}
+        onInstructionChange={(newInst) => editingStageInst && setStageInstructions(prev => ({ ...prev, [editingStageInst]: newInst }))}
+        defaultInstruction={editingStageInst ? defaultInstructions[editingStageInst] : ""}
       />
 
       <PresetOverlay 

@@ -714,10 +714,20 @@ ${script}`;
   }
 };
 
+export const DEFAULT_PROMPT_ENGINEERING_RULES = `
+4. **Prompt Engineering (Image + Motion Focus)**:
+   - **'final_image_prompt' (PRIORITY)**: Write a professional, descriptive prompt for high-end image generation. 
+     Structure: [Style Name] style, [Subject] [Composition] [Lighting]. [Technical Details: Lens, Aperture, Render Engine].
+     Example: "Cyberpunk style, a detailed circuit board with glowing golden traces, macro close-up, soft bokeh, volumetric lighting, unreal engine 5 render, ray-traced reflections, 8k resolution."
+   - **'image_to_video_prompt' (PRIORITY)**: Describe the *Camera Dynamics* and *Atmospheric Motion*. Use 4-8 words. 
+     Examples: "Slow cinematic zoom in with particles", "Smooth tracking shot right, gentle sway", "Subtle atmospheric particles moving, light rays", "Gentle focus pull from foreground to background".
+   - 'text_to_video_prompt': A standalone cinematic video prompt as a fallback for hybrid workflows.
+`.trim();
+
 export const generateSystemInstruction = (
   visualStylePrompt: string, 
   pacing: string,
-  mode: 'visual' | 't2v' = 'visual',
+  promptEngineeringRules?: string,
   totalDuration?: number
 ): string => {
   // 1. Handle Duration Overrides
@@ -763,28 +773,8 @@ export const generateSystemInstruction = (
     }
   }
 
-  // 3. Dynamic Prompt Engineering Instructions based on Mode
-  let promptEngineeringSection = "";
-  if (mode === 't2v') {
-     promptEngineeringSection = `
-4. **Prompt Engineering (Text-to-Video Focus)**:
-   - **'text_to_video_prompt' (PRIORITY)**: Write a high-fidelity, cinematic prompt for advanced video models (Sora/Kling/Gen-3). 
-     Structure: [Subject] [Action/Movement] in [Environment]. [Lighting/Atmosphere], [Camera Angle/Movement], [Visual Style].
-     Example: "A futuristic scientist operating a holographic interface in a dark, neon-lit lab. Cinematic lighting, slow dolly zoom, hyper-realistic 8k digital art style, fluid motion, high frame rate."
-   - 'final_image_prompt': A high-resolution reference frame prompt that captures the peak visual moment.
-   - 'image_to_video_prompt': Specific motion vectors and physical dynamics (e.g., "Fluid motion, 4k resolution, cinematic pan, realistic physics").
-     `;
-  } else {
-     promptEngineeringSection = `
-4. **Prompt Engineering (Image + Motion Focus)**:
-   - **'final_image_prompt' (PRIORITY)**: Write a professional, descriptive prompt for high-end image generation. 
-     Structure: [Style Name] style, [Subject] [Composition] [Lighting]. [Technical Details: Lens, Aperture, Render Engine].
-     Example: "Cyberpunk style, a detailed circuit board with glowing golden traces, macro close-up, soft bokeh, volumetric lighting, unreal engine 5 render, ray-traced reflections, 8k resolution."
-   - **'image_to_video_prompt' (PRIORITY)**: Describe the *Camera Dynamics* and *Atmospheric Motion*. Use 4-8 words. 
-     Examples: "Slow cinematic zoom in with particles", "Smooth tracking shot right, gentle sway", "Subtle atmospheric particles moving, light rays", "Gentle focus pull from foreground to background".
-   - 'text_to_video_prompt': A standalone cinematic video prompt as a fallback for hybrid workflows.
-     `;
-  }
+  // 3. Dynamic Prompt Engineering Instructions
+  const promptEngineeringSection = promptEngineeringRules || DEFAULT_PROMPT_ENGINEERING_RULES;
 
   // Use the advanced "Educational Visual Architect" system instruction
   return `
@@ -838,7 +828,7 @@ export const segmentScript = async (
   script: string, 
   visualStylePrompt: string, 
   pacing: string,
-  mode: 'visual' | 't2v' = 'visual',
+  promptEngineeringRules?: string,
   totalDuration?: number,
   userInstruction: string = "",
   customSystemInstruction?: string,
@@ -848,7 +838,7 @@ export const segmentScript = async (
 ): Promise<Scene[]> => {
   let systemInstruction = customSystemInstruction;
   if (!systemInstruction) {
-    systemInstruction = generateSystemInstruction(visualStylePrompt, pacing, mode, totalDuration);
+    systemInstruction = generateSystemInstruction(visualStylePrompt, pacing, promptEngineeringRules, totalDuration);
   }
 
   // Append user instruction if provided and we are not fully overriding

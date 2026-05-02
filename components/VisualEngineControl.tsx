@@ -6,11 +6,12 @@ interface VisualEngineControlProps {
   script: string;
   aiDirection: string;
   aiDirectionStages: Record<string, string>;
+  stageInstructions?: Record<string, string>;
   aesthetic: string;
   pacing: string;
   duration: string;
   canvasSize: string;
-  generationMode: 'visual' | 't2v';
+  promptEngineeringRules?: string;
   scenes: Scene[];
   onUpdateScenes: (scenes: Scene[]) => void;
 }
@@ -69,11 +70,12 @@ export const VisualEngineControl: React.FC<VisualEngineControlProps> = ({
   script,
   aiDirection,
   aiDirectionStages,
+  stageInstructions,
   aesthetic,
   pacing,
   duration,
   canvasSize,
-  generationMode,
+  promptEngineeringRules,
   scenes,
   onUpdateScenes
 }) => {
@@ -107,7 +109,7 @@ export const VisualEngineControl: React.FC<VisualEngineControlProps> = ({
   const getSystemInstruction = (stageId: number) => {
     const stage = STAGES_CONFIG.find(s => s.id === stageId);
     const stageName = `STAGE ${stageId}`;
-    const backbone = stage?.instruction || "";
+    const backbone = stageInstructions ? stageInstructions[stageName] : (stage?.instruction || "");
     const globalDir = aiDirection;
     const stageDir = aiDirectionStages[stageName];
 
@@ -123,12 +125,15 @@ export const VisualEngineControl: React.FC<VisualEngineControlProps> = ({
       instruction += `--- STAGE-SPECIFIC DIRECTION (OVERRIDES GLOBAL) ---\n${stageDir}\n\n`;
     }
     
+    if (promptEngineeringRules && (stageId === 3 || stageId === 4)) {
+      instruction += `--- PROMPT ENGINEERING RULES ---\n${promptEngineeringRules}\n\n`;
+    }
+    
     instruction += `SETTINGS:\n`;
     instruction += `- Aesthetics: ${aesthetic}\n`;
     instruction += `- Pacing: ${pacing}\n`;
     instruction += `- Script Duration: ${duration}s\n`;
     instruction += `- Canvas Size: ${canvasSize}\n`;
-    instruction += `- Generation Mode: ${generationMode === 't2v' ? 'Video' : 'Image'}\n`;
     
     instruction += `\nIMPORTANT: Return ONLY valid JSON. The output must be an array of scene objects.`;
     

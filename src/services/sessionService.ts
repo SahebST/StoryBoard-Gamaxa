@@ -1,6 +1,6 @@
 import { collection, doc, setDoc, getDocs, deleteDoc, query, where, orderBy, getDoc } from 'firebase/firestore';
-import { db, auth } from '../firebase';
-import { AppState } from '../types';
+import { db, auth } from '@/firebase';
+import { AppState } from '@/types';
 
 export enum OperationType {
   CREATE = 'create',

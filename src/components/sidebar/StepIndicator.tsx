@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { motion } from 'motion/react';
-import { Step } from '../types';
+import { Step } from '@/types';
 import { ChevronRight } from 'lucide-react';
 
 interface StepIndicatorProps {

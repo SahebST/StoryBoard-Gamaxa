@@ -1,12 +1,12 @@
 
 import React, { useState, useEffect } from 'react';
 import { Loader2, Check, Wand2, Copy, ChevronDown, ChevronUp, FolderOpen, Save } from 'lucide-react';
-import { Scene } from '../../types';
-import { segmentScript, generateSceneImage, generateSystemInstruction, analyzeScriptForVisuals, DEFAULT_ANALYZE_VISUALS_INSTRUCTION, DEFAULT_PROMPT_ENGINEERING_RULES } from '../../services/geminiService';
-import { Preset, savePresetToFirebase, listUserPresets, deletePresetFromFirebase } from '../../services/presetService';
-import { InstructionModal } from '../InstructionModal';
-import { VisualEngineControl, STAGES_CONFIG } from '../VisualEngineControl';
-import { PresetOverlay } from '../PresetOverlay';
+import { Scene } from '@/types';
+import { segmentScript, generateSceneImage, generateSystemInstruction, analyzeScriptForVisuals, DEFAULT_ANALYZE_VISUALS_INSTRUCTION, DEFAULT_PROMPT_ENGINEERING_RULES } from '@/services/geminiService';
+import { Preset, savePresetToFirebase, listUserPresets, deletePresetFromFirebase } from '@/services/presetService';
+import { InstructionModal } from '@/components/sidebar/InstructionModal';
+import { VisualEngineControl, STAGES_CONFIG } from '@/components/step3/VisualEngineControl';
+import { PresetOverlay } from '@/components/step3/PresetOverlay';
 
 interface Props {
   script: string;

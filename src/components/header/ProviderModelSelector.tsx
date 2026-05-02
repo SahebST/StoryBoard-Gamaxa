@@ -1,10 +1,10 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { Search, Filter, SortAsc, Zap, Shield, DollarSign, Cpu, Check, X, AlertCircle, Heart, FastForward, Maximize2, ChevronDown, ChevronUp } from 'lucide-react';
-import { fetchModels } from '../services/geminiService';
-import { AIModel } from '../types';
-import { CustomSelect } from './CustomSelect';
-import { saveModelsToCloud, getModelsFromCloud } from '../services/modelCacheService';
+import { fetchModels } from '@/services/geminiService';
+import { AIModel } from '@/types';
+import { CustomSelect } from '@/components/ui/CustomSelect';
+import { saveModelsToCloud, getModelsFromCloud } from '@/services/modelCacheService';
 
 export interface ProviderOption {
   id: string;

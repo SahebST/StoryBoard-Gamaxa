@@ -1,24 +1,25 @@
 
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { StepIndicator } from './components/StepIndicator';
-import { WorkflowDocModal } from './components/WorkflowDocModal';
-import { Step1Doc, Step2Doc, Step3Doc, Step4Doc } from './components/WorkflowDocs';
-import { ConfirmModal } from './components/ConfirmModal';
-import { HelpModal } from './components/HelpModal';
-import { CoreAIFallbackPopup } from './components/CoreAIFallbackPopup';
-import { Step1Settings } from './components/steps/Step1Settings';
-import { Step2ScriptAudio } from './components/steps/Step2ScriptAudio';
-import { Step3Images } from './components/steps/Step3Images';
-import { Step4SEO } from './components/steps/Step4SEO';
-import { SessionManager } from './components/SessionManager';
+import { StepIndicator } from '@/components/sidebar/StepIndicator';
+import { WorkflowDocModal } from '@/components/sidebar/WorkflowDocModal';
+import { Step1Doc, Step2Doc, Step3Doc, Step4Doc } from '@/components/sidebar/WorkflowDocs';
+import { ConfirmModal } from '@/components/ui/ConfirmModal';
+import { HelpModal } from '@/components/sidebar/HelpModal';
+import { CoreAIFallbackPopup } from '@/components/sidebar/CoreAIFallbackPopup';
+import { Step1Settings } from '@/components/step1/Step1Settings';
+import { Step2ScriptAudio } from '@/components/step2/Step2ScriptAudio';
+import { Step3Images } from '@/components/step3/Step3Images';
+import { Step4SEO } from '@/components/step4/Step4SEO';
+import { Header } from '@/components/header/Header';
+import { SessionManager } from '@/components/sidebar/SessionManager';
 import { 
   AppState, 
   INITIAL_SETTINGS, 
   ScriptSettings, 
   Step, 
   Scene 
-} from './types';
+} from '@/types';
 import { 
   analyzeScript,
   improveScript,
@@ -32,18 +33,18 @@ import {
   setActiveModel,
   generateMusicPrompt,
   getAppStateContext
-} from './services/geminiService';
+} from '@/services/geminiService';
 
-import { Sidebar } from './components/Sidebar';
-import { Footer } from './components/Footer';
-import { ChatBot } from './components/ChatBot';
-import { SystemConsole } from './components/SystemConsole';
+import { Sidebar } from '@/components/sidebar/Sidebar';
+import { Footer } from '@/components/footer/Footer';
+import { ChatBot } from '@/components/chat/ChatBot';
+import { SystemConsole } from '@/components/console/SystemConsole';
 import { 
   Terminal,
   ArrowUp,
   ArrowDown
 } from 'lucide-react';
-import { appLogger, ActivityState } from './services/loggerService';
+import { appLogger, ActivityState } from '@/services/loggerService';
 
 const wait = (ms: number) => new Promise(res => setTimeout(res, ms));
 
@@ -503,107 +504,40 @@ const App: React.FC = () => {
       />
       <div className="w-full max-w-6xl relative">
         
-        {/* Header */}
-        <div className="mb-4 flex flex-col items-center gap-3 relative">
-          
-          <Sidebar 
-            isOpen={isSidebarOpen}
-            setIsOpen={setIsSidebarOpen}
-            currentProvider={currentProvider}
-            currentModel={currentModel}
-            onProviderChange={handleProviderChange}
-            onModelChange={handleModelChange}
-            audioProvider={audioProvider}
-            audioModel={audioModel}
-            onAudioProviderChange={handleAudioProviderChange}
-            onAudioModelChange={handleAudioModelChange}
-            imageProvider={imageProvider}
-            imageModel={imageModel}
-            onImageProviderChange={handleImageProviderChange}
-            onImageModelChange={handleImageModelChange}
-            onLocalExport={handleSaveLocalSession}
-            onLocalImport={handleLoadLocalSessionClick}
-            sessionManagerNode={
-              <SessionManager 
-                currentState={state} 
-                onLoadState={(newState) => setState(newState)} 
-                onNewSession={handleRestart} 
-                sessionTitle={state.sessionTitle}
-                onSessionTitleChange={(title) => setState(prev => ({ ...prev, sessionTitle: title }))}
-                isSidebar={true}
-              />
-            }
-            onOpenHelp={() => setIsHelpOpen(true)}
-            onSideNavigate={handleStepClick}
-            onOpenWorkflowStep1={() => setIsWorkflowStep1Open(true)}
-            onOpenWorkflowStep2={() => setIsWorkflowStep2Open(true)}
-            onOpenWorkflowStep3={() => setIsWorkflowStep3Open(true)}
-            onOpenWorkflowStep4={() => setIsWorkflowStep4Open(true)}
-          />
-          <input 
-            type="file" 
-            ref={fileInputRef} 
-            onChange={handleLoadLocalSession} 
-            className="hidden" 
-            accept=".json"
-          />
-
-          <div className="text-center">
-            <motion.h1 
-              initial={{ opacity: 0, scale: 0.98, filter: 'blur(8px)', backgroundPosition: '200% 0%' }}
-              animate={{ 
-                opacity: 1, 
-                scale: 1,
-                filter: 'blur(0px)',
-                backgroundPosition: ['150% 0%', '-150% 0%']
-              }}
-              transition={{ 
-                opacity: { duration: 1.2 },
-                scale: { duration: 1.2 },
-                backgroundPosition: { 
-                  duration: 8, 
-                  repeat: Infinity, 
-                  ease: "linear",
-                  repeatDelay: 2
-                },
-                ease: [0.23, 1, 0.32, 1] 
-              }}
-              style={{ 
-                backgroundImage: 'linear-gradient(110deg, #cbd5e1 30%, #f8fafc 45%, #ffffff 50%, #f8fafc 55%, #cbd5e1 70%)',
-                backgroundSize: '200% 100%',
-                WebkitBackgroundClip: 'text',
-                backgroundClip: 'text'
-              }}
-              className="text-4xl md:text-5xl font-black tracking-tighter text-transparent cursor-default drop-shadow-[0_2px_10px_rgba(255,255,255,0.1)] py-4 select-none"
-            >
-              Gemini Creator Studio
-            </motion.h1>
-            <div className="mt-3 flex items-center justify-center gap-3">
-              <input
-                type="text"
-                value={state.sessionTitle}
-                onChange={(e) => setState(prev => ({ ...prev, sessionTitle: e.target.value }))}
-                placeholder={state.topic ? state.topic.substring(0, 30) + "..." : "Untitled Session"}
-                className="bg-[#161b22]/80 border border-gray-700/50 rounded-lg px-3 py-1.5 text-sm text-center text-gray-300 focus:outline-none focus:border-indigo-500/50 focus:ring-1 focus:ring-indigo-500/50 transition-all w-64 placeholder-gray-600"
-                title="Session Title"
-              />
-              <button
-                onClick={() => setIsAdvancedMode(!isAdvancedMode)}
-                className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all border ${
-                  isAdvancedMode 
-                    ? 'bg-amber-900/40 text-amber-400 border-amber-500/50 shadow-[0_0_10px_rgba(245,158,11,0.2)]' 
-                    : 'bg-gray-800/50 text-gray-500 border-gray-700 hover:text-gray-300 hover:bg-gray-800'
-                }`}
-                title="Toggle Advanced AI Instructions Control"
-              >
-                <div className="flex items-center gap-1.5">
-                  <div className={`w-1.5 h-1.5 rounded-full ${isAdvancedMode ? 'bg-amber-400 animate-pulse' : 'bg-gray-600'}`} />
-                  Advanced Control
-                </div>
-              </button>
-            </div>
-          </div>
-        </div>
+        <Header 
+          topic={state.topic}
+          sessionTitle={state.sessionTitle}
+          onSessionTitleChange={(title) => setState(prev => ({ ...prev, sessionTitle: title }))}
+          isAdvancedMode={isAdvancedMode}
+          onToggleAdvancedMode={() => setIsAdvancedMode(!isAdvancedMode)}
+          isSidebarOpen={isSidebarOpen}
+          setIsSidebarOpen={setIsSidebarOpen}
+          currentProvider={currentProvider}
+          currentModel={currentModel}
+          onProviderChange={handleProviderChange}
+          onModelChange={handleModelChange}
+          audioProvider={audioProvider}
+          audioModel={audioModel}
+          onAudioProviderChange={handleAudioProviderChange}
+          onAudioModelChange={handleAudioModelChange}
+          imageProvider={imageProvider}
+          imageModel={imageModel}
+          onImageProviderChange={handleImageProviderChange}
+          onImageModelChange={handleImageModelChange}
+          onLocalExport={handleSaveLocalSession}
+          onLocalImport={handleLoadLocalSessionClick}
+          onOpenHelp={() => setIsHelpOpen(true)}
+          onSideNavigate={handleStepClick}
+          onOpenWorkflowStep1={() => setIsWorkflowStep1Open(true)}
+          onOpenWorkflowStep2={() => setIsWorkflowStep2Open(true)}
+          onOpenWorkflowStep3={() => setIsWorkflowStep3Open(true)}
+          onOpenWorkflowStep4={() => setIsWorkflowStep4Open(true)}
+          fileInputRef={fileInputRef}
+          handleLoadLocalSession={handleLoadLocalSession}
+          currentState={state}
+          onLoadState={(newState) => setState(newState)}
+          onNewSession={handleRestart}
+        />
 
         {/* Wizard Progress */}
         <StepIndicator 

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { fetchAIResponse } from '../services/geminiService';
-import { Scene } from '../types';
+import { fetchAIResponse } from '@/services/geminiService';
+import { Scene } from '@/types';
 
 interface VisualEngineControlProps {
   script: string;

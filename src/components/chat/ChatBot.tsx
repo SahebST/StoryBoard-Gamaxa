@@ -2,8 +2,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { MessageSquare, Send, X, Bot, User, Sparkles, Minus, Maximize2, Trash2, Cpu, Settings as SettingsIcon, ChevronLeft, Plus, Copy, Check } from 'lucide-react';
-import { sendMessageToChat, ChatMessage } from '../services/geminiService';
-import { ProviderModelSelector } from './ProviderModelSelector';
+import { sendMessageToChat, ChatMessage } from '@/services/geminiService';
+import { ProviderModelSelector } from '@/components/sidebar/ProviderModelSelector';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 

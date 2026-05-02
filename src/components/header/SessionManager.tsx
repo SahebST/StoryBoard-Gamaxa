@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { auth } from '../firebase';
+import { auth } from '@/firebase';
 import { signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged, User } from 'firebase/auth';
-import { saveSessionToFirebase, loadSessionFromFirebase, listUserSessions, SessionMeta, deleteSessionFromFirebase } from '../services/sessionService';
-import { AppState } from '../types';
-import { ConfirmModal } from './ConfirmModal';
+import { saveSessionToFirebase, loadSessionFromFirebase, listUserSessions, SessionMeta, deleteSessionFromFirebase } from '@/services/sessionService';
+import { AppState } from '@/types';
+import { ConfirmModal } from '@/components/ui/ConfirmModal';
 import { X } from 'lucide-react';
 import { createPortal } from 'react-dom';
 

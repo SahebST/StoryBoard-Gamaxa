@@ -1,7 +1,7 @@
 
 import { jsonrepair } from "jsonrepair";
 import { GoogleGenAI, Type } from "@google/genai";
-import { ScriptSettings, Scene, SEOData, ScriptAnalysis, AIModel } from "../types";
+import { ScriptSettings, Scene, SEOData, ScriptAnalysis, AIModel } from '@/types';
 import { appLogger } from './loggerService';
 
 // --- Gemini SDK Initialization ---

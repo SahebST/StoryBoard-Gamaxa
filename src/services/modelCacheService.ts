@@ -1,6 +1,6 @@
 import { collection, doc, setDoc, getDocs, query, where } from 'firebase/firestore';
-import { db, auth } from '../firebase';
-import { AIModel } from '../types';
+import { db, auth } from '@/firebase';
+import { AIModel } from '@/types';
 
 export const saveModelsToCloud = async (providerId: string, models: AIModel[]): Promise<void> => {
   if (!auth.currentUser) return;

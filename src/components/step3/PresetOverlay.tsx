@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { X, Save, Trash2, FolderOpen, Plus, Loader2, Check } from 'lucide-react';
-import { Preset, savePresetToFirebase, listUserPresets, deletePresetFromFirebase } from '../services/presetService';
+import { Preset, savePresetToFirebase, listUserPresets, deletePresetFromFirebase } from '@/services/presetService';
 
 interface Props {
   isOpen: boolean;

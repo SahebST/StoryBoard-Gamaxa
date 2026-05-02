@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { ScriptAnalysis } from '../../types';
-import { DEFAULT_SCRIPT_INSTRUCTION, DEFAULT_ANALYZE_INSTRUCTION } from '../../services/geminiService';
-import { InstructionModal } from '../InstructionModal';
+import { ScriptAnalysis } from '@/types';
+import { DEFAULT_SCRIPT_INSTRUCTION, DEFAULT_ANALYZE_INSTRUCTION } from '@/services/geminiService';
+import { InstructionModal } from '@/components/sidebar/InstructionModal';
 
 interface Props {
   script: string;

@@ -2,7 +2,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { Terminal, X, Trash2, Wifi, WifiOff, Activity, AlertTriangle, AlertCircle, Info, Database, ArrowUp, ArrowDown } from 'lucide-react';
-import { appLogger, LogEntry, ActivityState } from '../services/loggerService';
+import { appLogger, LogEntry, ActivityState } from '@/services/loggerService';
 
 interface Props {
   isOpen: boolean;

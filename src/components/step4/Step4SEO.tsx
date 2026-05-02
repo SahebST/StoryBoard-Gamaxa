@@ -1,8 +1,8 @@
 
 import React, { useState } from 'react';
-import { SEOData } from '../../types';
-import { DEFAULT_SEO_INSTRUCTION } from '../../services/geminiService';
-import { InstructionModal } from '../InstructionModal';
+import { SEOData } from '@/types';
+import { DEFAULT_SEO_INSTRUCTION } from '@/services/geminiService';
+import { InstructionModal } from '@/components/sidebar/InstructionModal';
 
 interface Props {
   seoData: SEOData | null;

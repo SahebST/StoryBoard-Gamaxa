@@ -1,8 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { base64PCMToWavBlob, DEFAULT_MUSIC_INSTRUCTION, fetchVoices, Voice } from '../../services/geminiService';
-import { ScriptSettings } from '../../types';
-import { InstructionModal } from '../InstructionModal';
-import { AudioVisualizer } from '../AudioVisualizer';
+import { base64PCMToWavBlob, DEFAULT_MUSIC_INSTRUCTION, fetchVoices, Voice } from '@/services/geminiService';
+import { ScriptSettings } from '@/types';
+import { InstructionModal } from '@/components/sidebar/InstructionModal';
+import { AudioVisualizer } from '@/components/step2/AudioVisualizer';
 import { Loader2, Mic } from 'lucide-react';
 
 interface Props {

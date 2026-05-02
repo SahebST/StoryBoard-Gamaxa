@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Menu, X, Download, Upload, Cloud, Copy, LogIn, LogOut, Info, Settings, Database, User, Trash2, Mic, Image as ImageIcon, BookOpen, Layers } from 'lucide-react';
-import { ProviderModelSelector, clearModelCache } from './ProviderModelSelector';
-import { Step } from '../types';
+import { ProviderModelSelector, clearModelCache } from '@/components/sidebar/ProviderModelSelector';
+import { Step } from '@/types';
 
 interface SidebarProps {
   isOpen: boolean;
